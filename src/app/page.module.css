@@ -1,0 +1,304 @@
+.viewport {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background-color: #090e1a;
+  position: relative;
+  overflow-x: hidden;
+  padding: 3rem 1rem;
+}
+
+.backgroundGradient {
+  position: fixed;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle at 50% 30%, rgba(99, 102, 241, 0.12), transparent 50%),
+              radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.08), transparent 40%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mainContent {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 640px;
+  text-align: center;
+}
+
+.brandHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #4f46e5, #a855f7);
+  border-radius: 8px;
+}
+
+.brandName {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.welcomeTitle {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 3rem;
+  letter-spacing: -1px;
+}
+
+.cardContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.roleCard {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 2rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.roleCard:hover {
+  background: rgba(30, 41, 59, 0.6);
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.cardSelected {
+  background: rgba(79, 70, 229, 0.08) !important;
+  border: 2px solid #6366f1 !important;
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.15);
+}
+
+.iconBox {
+  width: 56px;
+  height: 56px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a5b4fc;
+  margin-bottom: 1.25rem;
+  transition: transform 0.3s;
+}
+
+.roleCard:hover .iconBox {
+  transform: scale(1.1);
+  background: rgba(99, 102, 241, 0.15);
+  color: #fff;
+}
+
+.cardTitle {
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.cardSubtitle {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* Sliding logic */
+.slideForm {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slideVisible {
+  max-height: 500px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 1rem;
+}
+
+.formCard {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 20px;
+  padding: 2.5rem;
+  text-align: left;
+  backdrop-filter: blur(12px);
+}
+
+.formStatus {
+  color: #94a3b8;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.highlightText {
+  color: #fff;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.inputGroup label {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.inputGroup input {
+  background: #020617;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  color: #fff;
+  font-family: inherit;
+  outline: none;
+  transition: 0.2s;
+}
+
+.inputGroup input:focus {
+  border-color: #6366f1;
+}
+
+.inputHint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+.submitBtn {
+  width: 100%;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  padding: 0.875rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: 0.2s;
+}
+
+.submitBtn:hover {
+  background: #4f46e5;
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switchText {
+  text-align: center;
+  margin-top: 1.5rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.switchText a {
+  color: #818cf8;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.switchText a:hover {
+  text-decoration: underline;
+}
+
+.inviteNote {
+  display: block;
+  background: rgba(99, 102, 241, 0.1);
+  color: #c7d2fe;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  line-height: 1.5;
+}
+
+.errorBanner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .cardContainer {
+    grid-template-columns: 1fr;
+  }
+  .welcomeTitle {
+    font-size: 1.75rem;
+  }
+}
+
+.passwordWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.passwordInput {
+  padding-right: 3rem !important;
+  flex: 1;
+}
+
+.toggleEyeBtn {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.toggleEyeBtn:hover {
+  color: #fff;
+}
+
+.eyeIcon {
+  width: 20px;
+  height: 20px;
+}
+

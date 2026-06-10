@@ -1,0 +1,203 @@
+"use client";
+import React from 'react';
+import api from '../../lib/api';
+import styles from './clockbutton.module.css';
+import { useDialog } from '../ui/DialogProvider';
+import { useSocket } from '../../hooks/useSocket';
+
+export default function ClockInOutButton() {
+  const { alert, confirm } = useDialog();
+  const socket = useSocket();
+  const [user, setUser] = React.useState<any>(null);
+  const [activeShift, setActiveShift] = React.useState<any>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const isProcessingRef = React.useRef(false);
+
+  // Localized precise stopwatch ticking state
+  const [tickerTime, setTickerTime] = React.useState(new Date());
+
+  React.useEffect(() => {
+    if (!activeShift) return;
+
+    // Reseed ticker immediately when clock-in state resolves
+    setTickerTime(new Date());
+
+    const interval = setInterval(() => {
+      setTickerTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeShift]);
+
+  const fetchShiftStatus = React.useCallback(async () => {
+    try {
+      const [uRes, sRes] = await Promise.all([
+        api.get('/auth/me'),
+        api.get('/timesheets/active')
+      ]);
+      setUser(uRes.data.user);
+      setActiveShift(sRes.data.active);
+    } catch (err) {
+      console.error('ClockBtn status sync failed:', err);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchShiftStatus();
+  }, [fetchShiftStatus]);
+
+  // Instantly react to backend-issued global auto-clock events
+  React.useEffect(() => {
+    if (!socket) return;
+    
+    const handleGlobalUpdate = () => {
+      console.info('[attendance] Real-time sync triggered via socket event.');
+      fetchShiftStatus();
+    };
+
+    socket.on('attendance:status_changed', handleGlobalUpdate);
+    return () => {
+      socket.off('attendance:status_changed', handleGlobalUpdate);
+    };
+  }, [socket, fetchShiftStatus]);
+
+  // Background synchronization loop: ensure correct global state every 6s
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      fetchShiftStatus();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [fetchShiftStatus]);
+
+  const toggleShift = async () => {
+    console.log('toggleShift triggered. activeShift:', activeShift);
+    // Synchronous immediate lock shielding against parallel execution before state commits
+    if (isProcessing || isProcessingRef.current) {
+      console.log('Already processing, ignoring click.');
+      return;
+    }
+    
+    try {
+      if (activeShift) {
+        console.log('Showing clock-out confirmation...');
+        // Simple confirmation for clocking out
+        const ok = await confirm('Are you sure you want to clock out for today?', 'End Shift');
+        console.log('Clock-out confirmation result:', ok);
+        if (!ok) return;
+
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        await api.post('/timesheets/out');
+        setActiveShift(null);
+      } else {
+        // CHECK PERSISTENT PERMISSION (USER REQUEST)
+        const previouslyAllowed = localStorage.getItem('locationAllowed') === 'true';
+        let ok = previouslyAllowed;
+
+        if (!previouslyAllowed) {
+          ok = await confirm(
+            "We need to verify your location for attendance (On-site vs WFH). Do you allow us to access your location?",
+            "Location Permission"
+          );
+          
+          if (ok) {
+            localStorage.setItem('locationAllowed', 'true');
+          } else {
+            await alert("Location access was not granted. You will be marked as WFH by default. You can enable this later to verify on-site attendance.", "Permission Denied");
+          }
+        }
+
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        
+        let locationData = {};
+        if (ok) {
+          try {
+            if ("geolocation" in navigator) {
+              const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: true,
+                  timeout: 10000, 
+                  maximumAge: 0
+                });
+              });
+              
+              locationData = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              };
+            }
+          } catch (geoErr) {
+            console.warn('Geolocation failed or denied by browser:', geoErr);
+          }
+        }
+
+        const res = await api.post('/timesheets/in', locationData);
+        setActiveShift(res.data.entry);
+      }
+      
+      // Force immediate local context synchronization
+      await fetchShiftStatus();
+
+      // Dispatch a global application event to notify sibling views (like Dashboard personal metrics) to immediately re-sync!
+      window.dispatchEvent(new Event('global-shift-status-changed'));
+      
+    } catch (err: any) {
+      await alert(err.response?.data?.message || 'Failed to process attendance action.', 'Error');
+    } finally {
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+    }
+  };
+
+  // Restrict rendering strictly to personnel level employees
+  if (!user || user.role !== 'employee') return null;
+
+  const renderStopwatch = () => {
+    if (!activeShift || !activeShift.clockIn) {
+      return (
+        <div className={styles.stopwatchContainer} style={{ opacity: 0.65 }}>
+          <span className={styles.stopwatchDotInactive}></span>
+          <span className={styles.stopwatchText} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            00:00
+          </span>
+        </div>
+      );
+    }
+
+    const inTime = new Date(activeShift.clockIn).getTime();
+    const nowTime = tickerTime.getTime();
+    const elapsedSecs = Math.max(0, Math.floor((nowTime - inTime) / 1000));
+
+    const hrs = Math.floor(elapsedSecs / 3600);
+    const mins = Math.floor((elapsedSecs % 3600) / 60);
+    const secs = elapsedSecs % 60;
+
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    
+    return (
+      <div className={styles.stopwatchContainer}>
+        <span className={styles.stopwatchDot}></span>
+        <span className={styles.stopwatchText} style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`}
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <div className={styles.wrapper}>
+      {renderStopwatch()}
+      <button
+        onClick={toggleShift}
+        disabled={isProcessing}
+        className={activeShift ? styles.clockOutBtn : styles.clockBtn}
+      >
+        <svg className={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        {isProcessing ? 'Processing...' : activeShift ? 'Clock Out' : 'Clock In'}
+      </button>
+    </div>
+  );
+}

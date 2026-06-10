@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+ 
+ :root {
+   --bg-color: #ffffff;
+   --container-bg: #f8fafc;
+   --border-color: #e2e8f0;
+   --text-color: #0f172a;
+   --text-muted: #64748b;
+   --primary: #ea580c;
+   --primary-hover: #c2410c;
+   --orange-gradient: linear-gradient(135deg, #f97316, #ea580c);
+   --glass-bg: #ffffff;
+   --glass-border: #e2e8f0;
+   --error: #ef4444;
+   --success: #16a34a;
+ }
+ 
+ * {
+   box-sizing: border-box;
+   margin: 0;
+   padding: 0;
+ }
+ 
+ body {
+   font-family: 'Inter', sans-serif;
+   background-color: var(--bg-color);
+   color: var(--text-color);
+   line-height: 1.5;
+   -webkit-font-smoothing: antialiased;
+   color-scheme: light; /* Force native UI elements to light mode */
+ }
+ 
+ button {
+   cursor: pointer;
+   font-family: inherit;
+ }
+ 
+ input {
+   font-family: inherit;
+   color-scheme: light;
+ }
+ 
+ a {
+   color: var(--primary);
+   text-decoration: none;
+   transition: color 0.2s;
+ }
+ 
+ a:hover {
+   color: var(--primary-hover);
+ }
+ 
+ /* --- Elegant Global Light Corporate Scrollbar Styling --- */
+ ::-webkit-scrollbar {
+   width: 8px;
+   height: 8px;
+ }
+ 
+ ::-webkit-scrollbar-track {
+   background: #f1f5f9;
+   border-radius: 10px;
+ }
+ 
+ ::-webkit-scrollbar-thumb {
+   background: #cbd5e1;
+   border-radius: 10px;
+   border: 2px solid transparent;
+   background-clip: content-box;
+   transition: all 0.2s ease;
+ }
+ 
+ ::-webkit-scrollbar-thumb:hover {
+   background: var(--primary);
+   background-clip: padding-box;
+ }
+ 
+ * {
+   scrollbar-width: thin;
+   scrollbar-color: #cbd5e1 #f1f5f9;
+ }
+ 
+ /* Leaflet Light Mode Styles */
+ .leaflet-container {
+   background: #f8fafc !important;
+ }
+ .leaflet-tile-pane {
+   /* No inversion, keep clean maps */
+ }
+ .leaflet-control-zoom {
+   border: 1px solid var(--border-color) !important;
+   box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+ }
+ .leaflet-control-zoom-in, .leaflet-control-zoom-out {
+   background: #ffffff !important;
+   color: #0f172a !important;
+   border-bottom: 1px solid var(--border-color) !important;
+ }
+ .leaflet-bar a:hover {
+   background: #f1f5f9 !important;
+ }
+ .leaflet-control-attribution {
+   background: rgba(255,255,255,0.8) !important;
+   color: #64748b !important;
+ }
+ .leaflet-control-attribution a { color: var(--primary) !important; }
