@@ -4,7 +4,9 @@
     "dev:all": "concurrently --kill-others-on-fail -n \"next,server\" -c \"cyan,yellow\" \"next dev\" \"ts-node-dev server/src/server.ts\"",
     "build": "next build",
     "start": "next start",
-    "server": "ts-node-dev server/src/server.ts"
+    "server": "ts-node-dev server/src/server.ts",
+    "build:server": "tsc -p server/tsconfig.json",
+    "start:server": "node server/dist/server.js"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
