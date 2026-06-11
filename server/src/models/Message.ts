@@ -19,6 +19,7 @@ export interface IMessage extends Document {
   parentId?: mongoose.Types.ObjectId; // Threading: Root message parent
   replyToId?: mongoose.Types.ObjectId; // Quoting / replying directly
   isForwarded?: boolean;
+  isEdited?: boolean;
   reactions?: IReaction[];
   createdAt: Date;
   updatedAt: Date;
@@ -39,6 +40,7 @@ const MessageSchema = new Schema<IMessage>(
     parentId: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
     replyToId: { type: Schema.Types.ObjectId, ref: 'Message', default: null },
     isForwarded: { type: Boolean, default: false },
+    isEdited: { type: Boolean, default: false },
     reactions: [
       {
         emoji: { type: String, required: true },
@@ -52,5 +54,6 @@ const MessageSchema = new Schema<IMessage>(
 // Index for fast retrieval
 MessageSchema.index({ orgId: 1, type: 1, createdAt: -1 });
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
+MessageSchema.index({ parentId: 1 });
 
 export const Message = mongoose.model<IMessage>('Message', MessageSchema);

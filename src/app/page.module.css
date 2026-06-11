@@ -1,13 +1,15 @@
+/* ── Landing Page — Zapier Design Language ────────────────────────────────── */
+
 .viewport {
   min-height: 100vh;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background-color: #090e1a;
+  background-color: var(--canvas);
   position: relative;
   overflow-x: hidden;
-  padding: 3rem 1rem;
+  padding: 4rem 1rem;
 }
 
 .backgroundGradient {
@@ -16,8 +18,9 @@
   left: -20%;
   width: 140%;
   height: 140%;
-  background: radial-gradient(circle at 50% 30%, rgba(99, 102, 241, 0.12), transparent 50%),
-              radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.08), transparent 40%);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 79, 0, 0.06), transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(255, 79, 0, 0.04), transparent 40%);
   z-index: 0;
   pointer-events: none;
 }
@@ -30,243 +33,266 @@
   text-align: center;
 }
 
+/* ── Brand Header ─────────────────────────────────────────────────────────── */
 .brandHeader {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .logo {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #4f46e5, #a855f7);
-  border-radius: 8px;
+  background: var(--primary);
+  border-radius: var(--radius-sm);
 }
 
 .brandName {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.5px;
-}
-
-.welcomeTitle {
-  font-size: 2.25rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  color: #fff;
-  margin-bottom: 3rem;
-  letter-spacing: -1px;
+  color: var(--ink);
+  letter-spacing: -0.3px;
 }
 
+/* ── Welcome Title ────────────────────────────────────────────────────────── */
+.welcomeTitle {
+  /* display-md: 32px / 500 / Inter */
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 2.5rem;
+  letter-spacing: 0.5px;
+  line-height: 1.15;
+}
+
+/* ── Role Cards ───────────────────────────────────────────────────────────── */
 .cardContainer {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: 1.25rem;
   margin-bottom: 2rem;
 }
 
 .roleCard {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  padding: 2rem 1.5rem;
+  /* card-content token */
+  background: var(--canvas-soft);
+  border: 1px solid var(--mute);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(8px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .roleCard:hover {
-  background: rgba(30, 41, 59, 0.6);
-  transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--body-mid);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(32, 21, 21, 0.07);
 }
 
 .cardSelected {
-  background: rgba(79, 70, 229, 0.08) !important;
-  border: 2px solid #6366f1 !important;
-  box-shadow: 0 0 30px rgba(99, 102, 241, 0.15);
+  background: rgba(255, 79, 0, 0.04) !important;
+  border: 1.5px solid var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.08) !important;
 }
 
 .iconBox {
-  width: 56px;
-  height: 56px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
+  background: var(--canvas);
+  border: 1px solid var(--mute);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #a5b4fc;
-  margin-bottom: 1.25rem;
-  transition: transform 0.3s;
+  color: var(--body);
+  margin-bottom: var(--space-lg);
+  transition: all 0.25s ease;
 }
 
 .roleCard:hover .iconBox {
-  transform: scale(1.1);
-  background: rgba(99, 102, 241, 0.15);
-  color: #fff;
+  background: rgba(255, 79, 0, 0.06);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cardSelected .iconBox {
+  background: rgba(255, 79, 0, 0.08);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .cardTitle {
-  color: #fff;
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+  /* display-xs: 20px / 700 */
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  letter-spacing: -0.3px;
 }
 
 .cardSubtitle {
-  color: #94a3b8;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  /* caption: 14px / 400 */
+  color: var(--body);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
-/* Sliding logic */
+/* ── Slide-in Form ────────────────────────────────────────────────────────── */
 .slideForm {
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(-20px);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(-12px);
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.35s ease,
+              transform 0.35s ease;
 }
 
 .slideVisible {
-  max-height: 500px;
+  max-height: 600px;
   opacity: 1;
   transform: translateY(0);
   margin-top: 1rem;
 }
 
 .formCard {
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 20px;
-  padding: 2.5rem;
+  /* ex-auth-form-card */
+  background: var(--canvas-soft);
+  border: 1px solid var(--mute);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl) var(--space-2xl);
   text-align: left;
-  backdrop-filter: blur(12px);
 }
 
 .formStatus {
-  color: #94a3b8;
+  /* body-sm */
+  color: var(--body);
   margin-bottom: 1.5rem;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   text-align: center;
 }
 
 .highlightText {
-  color: #fff;
+  color: var(--ink);
   font-weight: 600;
   text-transform: capitalize;
 }
 
+/* ── Form Inputs ──────────────────────────────────────────────────────────── */
 .inputGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
 }
 
 .inputGroup label {
-  color: #cbd5e1;
-  font-size: 0.875rem;
-  font-weight: 500;
+  /* eyebrow-like: 12px / 600 */
+  color: var(--body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .inputGroup input {
-  background: #020617;
-  border: 1px solid rgba(255,255,255,0.1);
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  color: #fff;
+  /* text-input token */
+  background: var(--canvas);
+  border: 1px solid var(--ink);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
   font-family: inherit;
+  font-size: 1rem;
   outline: none;
-  transition: 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.inputGroup input::placeholder {
+  color: var(--mute);
 }
 
 .inputGroup input:focus {
-  border-color: #6366f1;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.1);
 }
 
 .inputHint {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-top: 0.25rem;
-  margin-left: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--body-mid);
+  margin-top: 0.2rem;
 }
 
+/* ── Submit Button ────────────────────────────────────────────────────────── */
 .submitBtn {
+  /* button-primary */
   width: 100%;
-  background: #6366f1;
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   border: none;
-  padding: 0.875rem;
-  border-radius: 12px;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-md);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.05rem;
   cursor: pointer;
-  margin-top: 1rem;
-  transition: 0.2s;
+  margin-top: 0.75rem;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  letter-spacing: -0.1px;
 }
 
 .submitBtn:hover {
-  background: #4f46e5;
+  background: var(--primary-hover);
+  box-shadow: 0 4px 14px rgba(255, 79, 0, 0.28);
+  transform: translateY(-1px);
+}
+
+.submitBtn:active {
+  transform: translateY(0);
 }
 
 .submitBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
+/* ── Footer Links ─────────────────────────────────────────────────────────── */
 .switchText {
   text-align: center;
-  margin-top: 1.5rem;
-  color: #64748b;
+  margin-top: 1.25rem;
+  color: var(--body);
   font-size: 0.9rem;
 }
 
 .switchText a {
-  color: #818cf8;
-  text-decoration: none;
-  font-weight: 500;
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .switchText a:hover {
+  color: var(--primary-hover);
   text-decoration: underline;
 }
 
-.inviteNote {
-  display: block;
-  background: rgba(99, 102, 241, 0.1);
-  color: #c7d2fe;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  line-height: 1.5;
-}
-
+/* ── Error Banner ─────────────────────────────────────────────────────────── */
 .errorBanner {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-  padding: 0.75rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
+  background: rgba(192, 57, 43, 0.07);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+  color: #c0392b;
+  padding: 0.75rem var(--space-lg);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
   text-align: center;
 }
 
-@media (max-width: 640px) {
-  .cardContainer {
-    grid-template-columns: 1fr;
-  }
-  .welcomeTitle {
-    font-size: 1.75rem;
-  }
-}
-
+/* ── Password Input ───────────────────────────────────────────────────────── */
 .passwordWrapper {
   position: relative;
   display: flex;
@@ -285,7 +311,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--mute);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -294,11 +320,23 @@
 }
 
 .toggleEyeBtn:hover {
-  color: #fff;
+  color: var(--ink);
 }
 
 .eyeIcon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .cardContainer {
+    grid-template-columns: 1fr;
+  }
+  .welcomeTitle {
+    font-size: 1.6rem;
+  }
+  .formCard {
+    padding: var(--space-xl) var(--space-lg);
+  }
+}

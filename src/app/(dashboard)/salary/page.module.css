@@ -58,7 +58,7 @@
 }
 
 .primaryBtn {
-  background: var(--orange-gradient);
+  background: var(--primary);
   color: #ffffff;
 }
 
@@ -137,7 +137,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--orange-gradient);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,12 +265,53 @@
   background: rgba(22, 163, 74, 0.04);
 }
 
+.halfDayRow {
+  background: rgba(234, 88, 12, 0.04);
+}
+
 .absentRow {
   background: rgba(239, 68, 68, 0.02);
 }
 
 .weekendRow {
   background: rgba(148, 163, 184, 0.04);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 80px;
+}
+
+.badgeFull {
+  background: rgba(22, 163, 74, 0.08);
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+}
+
+.badgeHalf {
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--primary);
+  border: 1px solid rgba(234, 88, 12, 0.15);
+}
+
+.badgeAbsent {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.badgeWeekend {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
 }
 
 @media (max-width: 1100px) {
@@ -430,7 +471,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--orange-gradient);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;

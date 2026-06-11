@@ -1,6 +1,18 @@
 import { Notification } from '../models/Notification';
 import { User } from '../models/User';
 import mongoose from 'mongoose';
+import { getSocketIO } from '../gateway/chat.gateway';
+
+const pushNotifSocket = (userId: string, notification: any) => {
+  try {
+    const io = getSocketIO();
+    if (io) {
+      io.to(`user:${userId}`).emit('notification:new', notification);
+    }
+  } catch (err) {
+    console.error('[Notification Service] Socket push failed:', err);
+  }
+};
 
 export const notificationService = {
   createNotification: async (params: {
@@ -11,7 +23,7 @@ export const notificationService = {
     message: string;
     actionUrl?: string;
   }) => {
-    return Notification.create({
+    const notif = await Notification.create({
       userId: new mongoose.Types.ObjectId(params.userId as string),
       orgId: new mongoose.Types.ObjectId(params.orgId as string),
       type: params.type,
@@ -19,6 +31,9 @@ export const notificationService = {
       message: params.message,
       actionUrl: params.actionUrl,
     });
+
+    pushNotifSocket(params.userId.toString(), notif.toObject());
+    return notif;
   },
 
   notifyAdmins: async (orgId: string | mongoose.Types.ObjectId, params: {
@@ -42,7 +57,10 @@ export const notificationService = {
     }));
 
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+      const created = await Notification.insertMany(notifications);
+      created.forEach((notif) => {
+        pushNotifSocket(notif.userId.toString(), notif.toObject ? notif.toObject() : notif);
+      });
     }
   },
 

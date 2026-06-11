@@ -959,6 +959,35 @@ export const authService = {
 
     return { user, accessToken, refreshRaw: refresh.raw };
   },
+
+  /** Verify TOTP for a sensitive action (user is already authenticated) */
+  verifyActionTotp: async (userId: string, code: string) => {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found.');
+    if (!user.twoFactorEnabled || user.twoFactorDevices.length === 0) {
+      throw new Error('Two-Factor Authentication is not enabled on your account.');
+    }
+
+    const { totpHelper } = await import('../utils/totp');
+    const { decrypt } = await import('../utils/crypto');
+
+    const codeClean = code.trim();
+    let isValid = false;
+
+    for (const device of user.twoFactorDevices) {
+      const secret = decrypt(device.secret);
+      if (totpHelper.verify(codeClean, secret)) {
+        isValid = true;
+        break;
+      }
+    }
+
+    if (!isValid) {
+      throw new Error('Invalid authenticator code. Please check your app and try again.');
+    }
+
+    return { verified: true };
+  },
 };
 
 function cryptoRandomHex(len: number) {

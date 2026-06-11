@@ -1,96 +1,102 @@
+/* ── DatePicker — Zapier Design Language ──────────────────────────────────── */
+
 .wrapper {
   position: relative;
   width: 100%;
 }
 
+/* ── Trigger ──────────────────────────────────────────────────────────────── */
 .inputBox {
   width: 100%;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--glass-border);
-  color: #fff;
-  padding: 0.75rem 1rem;
+  /* text-input token */
+  background: var(--canvas);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: var(--space-md) var(--space-lg);
   padding-right: 2.5rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 45px;
+  min-height: 44px;
 }
 
-.inputBox:focus, .activeInput {
+.inputBox:focus,
+.activeInput {
   border-color: var(--primary) !important;
-  background: rgba(255,255,255,0.06) !important;
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.1) !important;
 }
 
 .placeholder {
-  color: var(--text-muted);
+  color: var(--mute);
 }
 
 .calIcon {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 15px;
+  height: 15px;
   color: var(--primary);
+  flex-shrink: 0;
 }
 
-/* CALENDAR POPOVER */
+/* ── Popover ──────────────────────────────────────────────────────────────── */
 .popover {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
   width: 320px;
-  background: rgba(15, 23, 42, 0.95); /* Dark slate */
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(15px);
+  background: var(--canvas);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(32, 21, 21, 0.09), 0 2px 8px rgba(32, 21, 21, 0.05);
   z-index: 1000;
-  padding: 1.25rem;
+  padding: var(--space-xl);
   user-select: none;
-  animation: popUp 0.2s ease-out;
+  animation: popUp 0.18s ease-out;
 }
 
 @keyframes popUp {
-  from { opacity: 0; transform: translateY(5px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)  scale(1); }
 }
 
-/* HEADER */
+/* ── Header ───────────────────────────────────────────────────────────────── */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.1rem;
 }
 
 .monthTitle {
-  font-weight: 600;
-  color: #fff;
+  font-weight: 700;
+  color: var(--ink);
   font-size: 0.95rem;
+  letter-spacing: -0.2px;
 }
 
 .navBtn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  color: #fff;
+  background: var(--canvas);
+  border: 1px solid var(--border-color);
+  color: var(--ink);
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .navBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--canvas-soft);
+  border-color: var(--body-mid);
 }
 
 .navBtn:disabled {
@@ -99,49 +105,51 @@
 }
 
 .navIcon {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   stroke-width: 2.5;
 }
 
-/* DAYS GRID */
+/* ── Days Grid ────────────────────────────────────────────────────────────── */
 .weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .weekdayLabel {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: var(--body-mid);
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .daysGrid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 3px;
 }
 
 .dayCell {
-  height: 36px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  color: #e2e8f0;
-  transition: all 0.15s;
+  color: var(--ink-mid);
+  transition: background 0.12s, color 0.12s;
   background: transparent;
   border: none;
+  font-family: inherit;
 }
 
 .dayCell:hover:not(.disabledDay):not(.selectedDay) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--canvas-soft);
+  color: var(--ink);
 }
 
 .emptyDay {
@@ -149,20 +157,20 @@
 }
 
 .today {
-  border: 1px dashed var(--primary);
+  border: 1.5px dashed var(--primary);
   color: var(--primary);
   font-weight: 600;
 }
 
 .selectedDay {
   background: var(--primary) !important;
-  color: #fff !important;
+  color: var(--on-primary) !important;
   font-weight: 700 !important;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 3px 10px rgba(255, 79, 0, 0.25);
 }
 
 .disabledDay {
-  color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--mute) !important;
   cursor: not-allowed;
   background: transparent !important;
 }

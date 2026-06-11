@@ -56,6 +56,7 @@ export default function TimeOffPage() {
   // Employee-Specific Data
   const [myRequests, setMyRequests] = React.useState<TimeOffRequest[]>([]);
   const [showRequestModal, setShowRequestModal] = React.useState(false);
+  const [isClosingRequestModal, setIsClosingRequestModal] = React.useState(false);
 
   // Calendar states
   const [viewMode, setViewMode] = React.useState<'list' | 'calendar'>('list');
@@ -64,6 +65,23 @@ export default function TimeOffPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedDayForModal, setSelectedDayForModal] = React.useState<Date | null>(null);
+  const [isClosingDayModal, setIsClosingDayModal] = React.useState(false);
+
+  const closeRequestModal = () => {
+    setIsClosingRequestModal(true);
+    setTimeout(() => {
+      setShowRequestModal(false);
+      setIsClosingRequestModal(false);
+    }, 250);
+  };
+
+  const closeDayModal = () => {
+    setIsClosingDayModal(true);
+    setTimeout(() => {
+      setSelectedDayForModal(null);
+      setIsClosingDayModal(false);
+    }, 250);
+  };
 
   // Form State - Create Holiday (Admin)
   const [mode, setMode] = React.useState<'whole_org' | 'individual'>('whole_org');
@@ -197,7 +215,7 @@ export default function TimeOffPage() {
       setReqStart('');
       setReqEnd('');
       setReqReason('');
-      setShowRequestModal(false);
+      closeRequestModal();
       // Refetch
       const myReqsResp = await api.get('/time-off/my-requests');
       setMyRequests(myReqsResp.data.requests);
@@ -347,11 +365,6 @@ export default function TimeOffPage() {
               : 'Track official company holidays and request personalized time off.'}
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <QuickActions />
-          <NotificationDrawer />
-          <ClockInOutButton />
-        </div>
       </header>
 
       {/* View Switcher Toggle Bar */}
@@ -362,14 +375,16 @@ export default function TimeOffPage() {
             className={`${styles.toggleBtn} ${viewMode === 'list' ? styles.toggleActive : ''}`}
             onClick={() => setViewMode('list')}
           >
-            📋 List View
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            List View
           </button>
           <button 
             type="button" 
             className={`${styles.toggleBtn} ${viewMode === 'calendar' ? styles.toggleActive : ''}`}
             onClick={() => setViewMode('calendar')}
           >
-            📅 Calendar View
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            Calendar View
           </button>
         </div>
 
@@ -553,7 +568,10 @@ export default function TimeOffPage() {
               {/* Card 3: Pending Holiday Requests */}
               <div className={styles.card}>
                 <h2 className={styles.cardTitle}>
-                  <span>⏳ Pending Holiday Requests</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px', marginRight: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Pending Holiday Requests
+                  </span>
                   {activePendingRequests.length > 0 && (
                     <span className={styles.badgeInline}>{activePendingRequests.length}</span>
                   )}
@@ -578,7 +596,7 @@ export default function TimeOffPage() {
                             <span className={styles.badgePending} style={{ fontSize: '0.65rem' }}>{r.status}</span>
                           </div>
                           
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-color)' }}>
                             {formatDate(r.startDate)} {r.startDate !== r.endDate && ` — ${formatDate(r.endDate)}`}
                           </div>
                           <p className={styles.itemDesc} style={{ fontStyle: 'italic', fontSize: '0.8rem' }}>"{r.reason}"</p>
@@ -609,7 +627,10 @@ export default function TimeOffPage() {
               {/* Card 4: Request History Archive */}
               <div className={styles.card}>
                 <h2 className={styles.cardTitle}>
-                  <span>📚 Request History Archive</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px', marginRight: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                    Request History Archive
+                  </span>
                 </h2>
                 
                 <div>
@@ -637,7 +658,7 @@ export default function TimeOffPage() {
                             </span>
                           </div>
                           
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-color)' }}>
                             {formatDate(r.startDate)} {r.startDate !== r.endDate && ` — ${formatDate(r.endDate)}`}
                           </div>
                           <p className={styles.itemDesc} style={{ fontStyle: 'italic', fontSize: '0.8rem' }}>"{r.reason}"</p>
@@ -656,7 +677,10 @@ export default function TimeOffPage() {
           <div className={styles.viewGrid}>
             {/* Section 1: Assigned Holidays */}
             <div className={styles.card}>
-              <h2 className={styles.cardTitle}>🏛️ Company Holidays Given</h2>
+              <h2 className={styles.cardTitle}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h18" /></svg>
+                Company Holidays Given
+              </h2>
               <div className={styles.historyList}>
                 {holidays.length === 0 ? (
                   <div className={styles.emptyState}>No holidays assigned yet</div>
@@ -679,7 +703,10 @@ export default function TimeOffPage() {
             {/* Section 2: Request Time Off & History */}
             <div className={styles.card}>
               <div className={styles.cardTitle}>
-                <span>🗓️ Request Time Off</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px', marginRight: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6v6m-3-3h6" /></svg>
+                  Request Time Off
+                </span>
                 <button onClick={() => setShowRequestModal(true)} className={styles.submitBtn} style={{marginTop:0, padding:'0.5rem 1rem'}}>
                   + Make New Request
                 </button>
@@ -749,7 +776,8 @@ export default function TimeOffPage() {
                         className={`${styles.eventStrip} ${h.type === 'whole_org' ? styles.eventHolidayWhole : styles.eventHolidayIndiv}`}
                         title={h.description}
                       >
-                        🏛️ {h.description}
+                        <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '14px', height: '14px', display: 'inline-block', marginRight: '4px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h18" /></svg>
+                        {h.description}
                       </div>
                     ))}
 
@@ -760,7 +788,17 @@ export default function TimeOffPage() {
                         className={`${styles.eventStrip} ${r.status === 'approved' ? styles.eventRequestApproved : styles.eventRequestPending}`}
                         title={r.reason}
                       >
-                        {currUser?.role !== 'employee' ? `👤 ${r.userId.name}: ${r.reason}` : `🌴 ${r.reason}`}
+                        {currUser?.role !== 'employee' ? (
+                          <>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px', display: 'inline-block', marginRight: '4px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                            {r.userId.name}: {r.reason}
+                          </>
+                        ) : (
+                          <>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px', display: 'inline-block', marginRight: '4px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M3 12h2.25m-.386-6.364l1.591 1.591M12 7.5a4.5 4.5 0 110 9 4.5 4.5 0 010-9z" /></svg>
+                            {r.reason}
+                          </>
+                        )}
                       </div>
                     ))}
 
@@ -778,13 +816,13 @@ export default function TimeOffPage() {
 
       {/* Day Details Modal */}
       {selectedDayForModal && (
-        <div className={styles.modalOverlay} onClick={() => setSelectedDayForModal(null)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+        <div className={`${styles.modalOverlay} ${isClosingDayModal ? 'closingOverlay' : ''}`} onClick={closeDayModal}>
+          <div className={`${styles.modalContent} ${isClosingDayModal ? 'closingContent' : ''}`} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3 className={styles.modalTitle}>
                 Events for {selectedDayForModal.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </h3>
-              <button type="button" className={styles.modalCloseBtn} onClick={() => setSelectedDayForModal(null)}>×</button>
+              <button type="button" className={styles.modalCloseBtn} onClick={closeDayModal}>×</button>
             </div>
 
             <div className={styles.modalBody}>
@@ -805,7 +843,10 @@ export default function TimeOffPage() {
                     {/* Holidays Section */}
                     {dayHolidays.length > 0 && (
                       <div className={styles.modalSection}>
-                        <h4 className={styles.modalSectionTitle}>🏛️ Holidays</h4>
+                        <h4 className={styles.modalSectionTitle}>
+                          <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h18" /></svg>
+                          Holidays
+                        </h4>
                         <div className={styles.modalEventsList}>
                           {dayHolidays.map(h => (
                             <div key={h._id} className={styles.modalEventCard} style={{ borderLeft: '4px solid #f97316' }}>
@@ -832,7 +873,10 @@ export default function TimeOffPage() {
                     {/* Time-Off Requests Section */}
                     {dayRequests.length > 0 && (
                       <div className={styles.modalSection} style={{ marginTop: dayHolidays.length > 0 ? '1.5rem' : '0' }}>
-                        <h4 className={styles.modalSectionTitle}>🌴 Leave Requests</h4>
+                        <h4 className={styles.modalSectionTitle}>
+                          <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M3 12h2.25m-.386-6.364l1.591 1.591M12 7.5a4.5 4.5 0 110 9 4.5 4.5 0 010-9z" /></svg>
+                          Leave Requests
+                        </h4>
                         <div className={styles.modalEventsList}>
                           {dayRequests.map(r => (
                             <div 
@@ -894,11 +938,11 @@ export default function TimeOffPage() {
 
       {/* MODAL DIALOG (Employee Create Request Popup) */}
       {showRequestModal && (
-        <div className={styles.modalBackdrop}>
-          <div className={styles.modalContent}>
+        <div className={`${styles.modalBackdrop} ${isClosingRequestModal ? 'closingBackdrop' : ''}`} onClick={closeRequestModal}>
+          <div className={`${styles.modalContent} ${isClosingRequestModal ? 'closingContent' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Request Time Off</h2>
-              <button className={styles.closeBtn} onClick={() => setShowRequestModal(false)}>✕</button>
+              <button type="button" className={styles.closeBtn} onClick={closeRequestModal}>✕</button>
             </div>
 
             <form onSubmit={handleSubmitRequest} className={styles.form}>

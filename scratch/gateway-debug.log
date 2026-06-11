@@ -1,0 +1,59 @@
+[2026-06-10T14:31:26.908Z] chat:react received for messageId: 6a252596e245db8e2cdab0ce, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:31:27.087Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a29753fd8c44acf68c71876"}]
+[2026-06-10T14:31:27.338Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:31:30.937Z] chat:react received for messageId: 6a252596e245db8e2cdab0ce, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:31:31.138Z] chat:react saved to DB. Reactions array: []
+[2026-06-10T14:31:31.432Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:31:33.772Z] chat:react received for messageId: 6a252596e245db8e2cdab0ce, emoji: 👍, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:31:34.247Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297546d8c44acf68c7187c"}]
+[2026-06-10T14:31:34.374Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:31:40.869Z] chat:edit received for messageId: 6a25142087bffc8fc1696995, content: sab log kidhwdsver h ?, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:31:41.075Z] chat:edit saved to DB successfully!
+[2026-06-10T14:31:43.053Z] chat:edit broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:32:33.846Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 👍, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:32:33.972Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451"],"_id":"6a2525bee245db8e2cdab0dc"},{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297581d8c44acf68c71892"}]
+[2026-06-10T14:32:34.077Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:32:35.997Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:32:36.130Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451","6a02d9806b830424cb2b9f71"],"_id":"6a2525bee245db8e2cdab0dc"}]
+[2026-06-10T14:32:36.221Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:32:36.906Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:32:37.032Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451"],"_id":"6a2525bee245db8e2cdab0dc"}]
+[2026-06-10T14:32:37.097Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:32:37.573Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:32:37.689Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451","6a02d9806b830424cb2b9f71"],"_id":"6a2525bee245db8e2cdab0dc"}]
+[2026-06-10T14:32:38.217Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T14:32:38.608Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 😂, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T14:32:38.984Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451"],"_id":"6a2525bee245db8e2cdab0dc"}]
+[2026-06-10T14:32:39.104Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70
+[2026-06-10T15:08:24.893Z] chat:react received for messageId: 6a0588ca8281f5831e28518f, emoji: 🔥, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:08:25.230Z] chat:react saved to DB. Reactions array: [{"emoji":"🔥","userIds":["6a05792d7e44b5cc30c8a1f5"],"_id":"6a297de9abce76bc49475e6c"}]
+[2026-06-10T15:08:25.411Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:08:25.412Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:10:42.408Z] chat:react received for messageId: 6a297e21abce76bc49475ea4, emoji: 👍, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:42.475Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297e72abce76bc49475eea"}]
+[2026-06-10T15:10:42.783Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:42.783Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:10:45.245Z] chat:react received for messageId: 6a297e21abce76bc49475ea4, emoji: 👍, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:45.316Z] chat:react saved to DB. Reactions array: []
+[2026-06-10T15:10:45.652Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:45.653Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:10:46.262Z] chat:react received for messageId: 6a297e21abce76bc49475ea4, emoji: 👍, userId: 6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:46.327Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297e76abce76bc49475eec"}]
+[2026-06-10T15:10:46.391Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:10:46.393Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:16.695Z] chat:react received for messageId: 6a297e09abce76bc49475e96, emoji: 🔥, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:17.008Z] chat:react saved to DB. Reactions array: [{"emoji":"🔥","userIds":["6a05792d7e44b5cc30c8a1f5"],"_id":"6a297f848f1d23320117b42b"}]
+[2026-06-10T15:15:18.232Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:15:18.234Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:21.062Z] chat:react received for messageId: 6a297e09abce76bc49475e96, emoji: ✔️, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:21.242Z] chat:react saved to DB. Reactions array: [{"emoji":"✔️","userIds":["6a05792d7e44b5cc30c8a1f5"],"_id":"6a297f898f1d23320117b42e"}]
+[2026-06-10T15:15:21.362Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:15:21.363Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:23.630Z] chat:react received for messageId: 6a297e21abce76bc49475ea4, emoji: 👍, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:23.695Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71","6a05792d7e44b5cc30c8a1f5"],"_id":"6a297e76abce76bc49475eec"}]
+[2026-06-10T15:15:23.757Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:15:23.759Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:24.570Z] chat:react received for messageId: 6a297e21abce76bc49475ea4, emoji: 👍, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-10T15:15:24.894Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297e76abce76bc49475eec"}]
+[2026-06-10T15:15:24.956Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
+[2026-06-10T15:15:24.956Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5

@@ -2,6 +2,7 @@
 import React from 'react';
 import api from '../../lib/api';
 import styles from './notificationdrawer.module.css';
+import { useSocket } from '../../hooks/useSocket';
 
 export interface INotification {
   _id: string;
@@ -34,6 +35,10 @@ function getNotifIcon(type: string) {
   if (type === 'chat_mention') return '📢';
   if (type === 'time_off_request' || type === 'time_off_response') return '📅';
   if (type === 'join_request' || type === 'join_approved' || type === 'join_rejected') return '👤';
+  if (type === 'task_assigned') return '📋';
+  if (type === 'task_completed') return '✅';
+  if (type === 'task_revision') return '⚠️';
+  if (type === 'task_stage_changed') return '🔄';
   return '🔔';
 }
 
@@ -52,6 +57,13 @@ export default function NotificationDrawer() {
     }
   }, []);
 
+  // Request browser Notification permission on mount
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Initial fetch
   React.useEffect(() => {
     fetchNotifications();
@@ -65,35 +77,42 @@ export default function NotificationDrawer() {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  // Real-time socket push — connect immediately using token from cookie
+  const socket = useSocket();
+
+  // Real-time socket push
   React.useEffect(() => {
-    let cleanup: (() => void) | undefined;
+    if (!socket) return;
 
-    const connectAndListen = async () => {
-      // Dynamically import to avoid SSR issues
-      const { getSocket } = await import('../../lib/socket');
+    const handler = (notif?: any) => {
+      fetchNotifications();
 
-      // Read access token from the session cookie set by setAccessToken()
-      const cookieToken = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('accessToken='))
-        ?.split('=')[1];
+      // Show browser desktop notification if payload is received and browser tab is unfocused
+      if (notif && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const isChatNotif = notif.type === 'chat_message' || notif.type === 'chat_dm';
+        const isChatPage = window.location.pathname === '/chat';
 
-      if (!cookieToken) return;
-
-      const socket = getSocket(cookieToken);
-
-      const handler = () => fetchNotifications();
-      socket.off('notification:new', handler);
-      socket.on('notification:new', handler);
-
-      cleanup = () => socket.off('notification:new', handler);
+        // Prevent duplication with the dedicated chat page handlers
+        if (!isChatPage || !isChatNotif) {
+          if (!document.hasFocus()) {
+            try {
+              new Notification(notif.title, {
+                body: notif.message,
+                tag: `app-notification-${notif._id || Date.now()}`,
+                renotify: true
+              } as any);
+            } catch (err) {
+              console.error('Failed to display desktop notification:', err);
+            }
+          }
+        }
+      }
     };
 
-    connectAndListen();
-
-    return () => cleanup?.();
-  }, [fetchNotifications]);
+    socket.on('notification:new', handler);
+    return () => {
+      socket.off('notification:new', handler);
+    };
+  }, [socket, fetchNotifications]);
 
   // Close on outside click
   React.useEffect(() => {
@@ -147,7 +166,12 @@ export default function NotificationDrawer() {
     <div className={styles.wrapper} onClick={(e) => e.stopPropagation()}>
       <button
         className={styles.bellBtn}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+        }}
         aria-label="Notifications"
       >
         <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">

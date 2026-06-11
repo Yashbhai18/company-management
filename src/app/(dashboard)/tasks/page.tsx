@@ -1,5 +1,7 @@
 "use client";
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import api from '../../../lib/api';
 import styles from './tasks.module.css';
 import { useDialog } from '../../../components/ui/DialogProvider';
@@ -20,6 +22,13 @@ interface TeamRef {
   members: UserRef[];
 }
 
+interface TaskComment {
+  _id?: string;
+  userId: UserRef;
+  text: string;
+  createdAt: string;
+}
+
 interface TaskItem {
   _id: string;
   title: string;
@@ -35,6 +44,7 @@ interface TaskItem {
   checklist?: Array<{ text: string; completed: boolean }>;
   attachments?: Array<{ url: string; name: string }>;
   revisionNotes?: string;
+  comments?: TaskComment[];
   createdAt: string;
 }
 
@@ -56,17 +66,34 @@ interface GroupedTask {
 export default function TasksPage() {
   const { confirm } = useDialog();
   const socket = useSocket();
+  const searchParams = useSearchParams();
+  const currentView = searchParams.get('view') || 'kanban';
+
   const [me, setMe] = React.useState<any>(null);
   const [tasks, setTasks] = React.useState<TaskItem[]>([]);
   const [members, setMembers] = React.useState<UserRef[]>([]);
   const [teams, setTeams] = React.useState<TeamRef[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [mounted, setMounted] = React.useState(false);
+
+  // Timeline states
+  const [timelineDate, setTimelineDate] = React.useState(() => new Date());
 
   // Kanban states
   const [stages, setStages] = React.useState<string[]>(['backlog', 'in progress', 'revision', 'completed']);
   const [showAddStage, setShowAddStage] = React.useState(false);
   const [newStageName, setNewStageName] = React.useState('');
   const [draggedOverStage, setDraggedOverStage] = React.useState<string | null>(null);
+  const [activeMenuStage, setActiveMenuStage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setMounted(true);
+    const handleOutsideMenuClick = () => {
+      setActiveMenuStage(null);
+    };
+    window.addEventListener('click', handleOutsideMenuClick);
+    return () => window.removeEventListener('click', handleOutsideMenuClick);
+  }, []);
 
   // Modals Trigger toggles
   const [showAssignTask, setShowAssignTask] = React.useState(false);
@@ -100,6 +127,165 @@ export default function TasksPage() {
   const [showRevisionDialog, setShowRevisionDialog] = React.useState(false);
   const [pendingRevisionTaskId, setPendingRevisionTaskId] = React.useState('');
   const [pendingRevisionNotes, setPendingRevisionNotes] = React.useState('');
+
+  // Animation-Closing states
+  const [isClosingAssign, setIsClosingAssign] = React.useState(false);
+  const [isClosingAddStage, setIsClosingAddStage] = React.useState(false);
+  const [isClosingViewing, setIsClosingViewing] = React.useState(false);
+  const [isClosingRevision, setIsClosingRevision] = React.useState(false);
+
+  // Comments & Task Editing States
+  const [commentText, setCommentText] = React.useState('');
+  const [submittingComment, setSubmittingComment] = React.useState(false);
+
+  const [isEditingTask, setIsEditingTask] = React.useState(false);
+  const [editTitle, setEditTitle] = React.useState('');
+  const [editDesc, setEditDesc] = React.useState('');
+  const [editAssignedTo, setEditAssignedTo] = React.useState('');
+  const [editStart, setEditStart] = React.useState('');
+  const [editDue, setEditDue] = React.useState('');
+  const [editReminder, setEditReminder] = React.useState('');
+  const [submittingEdit, setSubmittingEdit] = React.useState(false);
+  const [editChecklist, setEditChecklist] = React.useState<Array<{ text: string; completed: boolean }>>([]);
+  const [editNewChecklistItem, setEditNewChecklistItem] = React.useState('');
+  const [editAttachments, setEditAttachments] = React.useState<Array<{ url: string; name: string }>>([]);
+  const [editAttachmentUrl, setEditAttachmentUrl] = React.useState('');
+  const [editAttachmentText, setEditAttachmentText] = React.useState('');
+
+  const closeAssignTask = () => {
+    setIsClosingAssign(true);
+    setTimeout(() => {
+      setShowAssignTask(false);
+      setIsClosingAssign(false);
+    }, 250);
+  };
+
+  const closeAddStage = () => {
+    setIsClosingAddStage(true);
+    setTimeout(() => {
+      setShowAddStage(false);
+      setIsClosingAddStage(false);
+    }, 250);
+  };
+
+  const closeViewingTask = () => {
+    setIsClosingViewing(true);
+    setTimeout(() => {
+      setViewingTask(null);
+      setIsClosingViewing(false);
+      setIsEditingTask(false);
+    }, 250);
+  };
+
+  const startEditingTask = () => {
+    if (!viewingTask) return;
+    setEditTitle(viewingTask.title);
+    setEditDesc(viewingTask.description || '');
+    setEditAssignedTo(viewingTask.assignedTo._id);
+    
+    // Convert dates to local datetime-local format 'YYYY-MM-DDTHH:MM'
+    const toLocalDateTimeString = (dateStr?: string) => {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const localISOTime = (new Date(d.getTime() - tzOffset)).toISOString().slice(0, 16);
+      return localISOTime;
+    };
+    
+    setEditStart(toLocalDateTimeString(viewingTask.startDate));
+    setEditDue(toLocalDateTimeString(viewingTask.dueDate));
+    setEditReminder(toLocalDateTimeString(viewingTask.reminderAt));
+    setEditChecklist(viewingTask.checklist || []);
+    setEditNewChecklistItem('');
+    setEditAttachments(viewingTask.attachments || []);
+    setEditAttachmentUrl('');
+    setEditAttachmentText('');
+    setIsEditingTask(true);
+  };
+
+  const cancelEditingTask = () => {
+    setIsEditingTask(false);
+  };
+
+  const addEditChecklistItem = () => {
+    if (!editNewChecklistItem.trim()) return;
+    setEditChecklist(prev => [...prev, { text: editNewChecklistItem.trim(), completed: false }]);
+    setEditNewChecklistItem('');
+  };
+
+  const removeEditChecklistItem = (index: number) => {
+    setEditChecklist(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addEditAttachment = () => {
+    if (!editAttachmentUrl.trim() || !editAttachmentText.trim()) return;
+    setEditAttachments(prev => [...prev, { url: editAttachmentUrl.trim(), name: editAttachmentText.trim() }]);
+    setEditAttachmentUrl('');
+    setEditAttachmentText('');
+  };
+
+  const removeEditAttachment = (index: number) => {
+    setEditAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveTaskEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewingTask) return;
+    if (!editTitle.trim()) {
+      handleShowAlert('error', 'Task title is required.');
+      return;
+    }
+
+    try {
+      setSubmittingEdit(true);
+      const res = await api.patch(`/tasks/${viewingTask._id}`, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        assignedTo: editAssignedTo,
+        startDate: editStart || null,
+        dueDate: editDue || null,
+        reminderAt: editReminder || null,
+        checklist: editChecklist,
+        attachments: editAttachments
+      });
+
+      setViewingTask(res.data.task);
+      setTasks(prev => prev.map(t => t._id === viewingTask._id ? res.data.task : t));
+      setIsEditingTask(false);
+      handleShowAlert('success', 'Task updated successfully!');
+    } catch (err: any) {
+      handleShowAlert('error', err.response?.data?.message || 'Failed to update task.');
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim() || !viewingTask) return;
+
+    try {
+      setSubmittingComment(true);
+      const res = await api.post(`/tasks/${viewingTask._id}/comments`, { text: commentText.trim() });
+      setViewingTask(res.data.task);
+      setTasks(prev => prev.map(t => t._id === viewingTask._id ? res.data.task : t));
+      setCommentText('');
+      handleShowAlert('success', 'Comment posted!');
+    } catch (err: any) {
+      handleShowAlert('error', err.response?.data?.message || 'Failed to add comment.');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const closeRevisionDialog = () => {
+    setIsClosingRevision(true);
+    setTimeout(() => {
+      setShowRevisionDialog(false);
+      setPendingRevisionTaskId('');
+      setIsClosingRevision(false);
+    }, 250);
+  };
 
   // General Feedback Alert system
   const [feedback, setFeedback] = React.useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -417,18 +603,223 @@ export default function TasksPage() {
   };
 
   const getStageColor = (stageName: string) => {
-    const s = stageName.toLowerCase();
-    if (s.includes('backlog')) return '#64748b';
-    if (s.includes('progress')) return '#3b82f6';
-    if (s.includes('revision')) return '#f59e0b';
-    if (s.includes('completed') || s.includes('done')) return '#10b981';
-    return '#a855f7';
+    return '#ea580c'; // Matches reference photo: unified orange stage dots
   };
 
   const formatTime = (dStr?: string) => {
     if (!dStr) return '';
     const d = new Date(dStr);
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const renderTimelineView = () => {
+    const year = timelineDate.getFullYear();
+    const month = timelineDate.getMonth();
+
+    const handlePrevMonth = () => {
+      setTimelineDate(new Date(year, month - 1, 1));
+    };
+
+    const handleNextMonth = () => {
+      setTimelineDate(new Date(year, month + 1, 1));
+    };
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const getDayOfWeekLetter = (day: number) => {
+      const date = new Date(year, month, day);
+      const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+      return days[date.getDay()];
+    };
+
+    // Filter tasks that overlap with the selected month
+    const timelineTasks = tasks.filter(task => {
+      if (!task.dueDate) return false;
+      const start = task.startDate ? new Date(task.startDate) : new Date(task.createdAt);
+      const due = new Date(task.dueDate);
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+      return start <= endOfMonth && due >= startOfMonth;
+    });
+
+    const undatedTasks = tasks.filter(task => !task.dueDate);
+
+    const getStatusColor = (status: string) => {
+      const s = status.toLowerCase();
+      if (s === 'completed') return '#22c55e'; // Green
+      if (s === 'revision') return '#ef4444'; // Red
+      if (s === 'in progress') return '#f97316'; // Orange
+      return '#64748b'; // Slate for backlog/pending
+    };
+
+    return (
+      <div className={styles.timelineContainer}>
+        {/* Month controller */}
+        <div className={styles.timelineControls}>
+          <div className={styles.monthSelector}>
+            <button type="button" onClick={handlePrevMonth} className={styles.navBtn} title="Previous Month">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={styles.navIcon}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+            <h2 className={styles.timelineMonthTitle}>
+              {timelineDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+            </h2>
+            <button type="button" onClick={handleNextMonth} className={styles.navBtn} title="Next Month">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={styles.navIcon}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setTimelineDate(new Date())} 
+            className={styles.secondaryBtn} 
+            style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+          >
+            Today
+          </button>
+        </div>
+
+        {/* The Grid Board */}
+        <div className={styles.timelineGridWrapper}>
+          <div 
+            className={styles.timelineGrid} 
+            style={{ 
+              gridTemplateColumns: `260px repeat(${daysInMonth}, minmax(40px, 1fr))` 
+            }}
+          >
+            {/* Header row */}
+            <div className={styles.timelineHeaderCell} style={{ borderBottom: '2px solid var(--border-color)' }}>
+              <strong>Task Directive</strong>
+            </div>
+            {daysArray.map(day => {
+              const dayOfWeek = getDayOfWeekLetter(day);
+              const isWeekend = dayOfWeek === 'Su' || dayOfWeek === 'Sa';
+              const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year;
+
+              return (
+                <div 
+                  key={day} 
+                  className={`${styles.timelineHeaderCell} ${isWeekend ? styles.weekendCell : ''} ${isToday ? styles.todayCell : ''}`}
+                  style={{ borderBottom: '2px solid var(--border-color)' }}
+                >
+                  <span className={styles.timelineDayNum}>{day.toString().padStart(2, '0')}</span>
+                  <span className={styles.timelineDayName}>{dayOfWeek}</span>
+                </div>
+              );
+            })}
+
+            {/* Task rows */}
+            {timelineTasks.length === 0 ? (
+              <div 
+                className={styles.timelineEmptyRow} 
+                style={{ gridColumn: `1 / span ${daysInMonth + 1}` }}
+              >
+                No tasks scheduled for this month.
+              </div>
+            ) : (
+              timelineTasks.map(task => {
+                const start = task.startDate ? new Date(task.startDate) : new Date(task.createdAt);
+                const due = new Date(task.dueDate!);
+                
+                let startDay = 1;
+                if (start.getFullYear() === year && start.getMonth() === month) {
+                  startDay = start.getDate();
+                }
+                
+                let endDay = daysInMonth;
+                if (due.getFullYear() === year && due.getMonth() === month) {
+                  endDay = due.getDate();
+                }
+
+                // Clamp days range
+                startDay = Math.max(1, Math.min(daysInMonth, startDay));
+                endDay = Math.max(startDay, Math.min(daysInMonth, endDay));
+
+                const colStart = startDay + 1; // offset by 1 for left header column
+                const colSpan = endDay - startDay + 1;
+
+                const statusColor = getStatusColor(task.status);
+                
+                return (
+                  <React.Fragment key={task._id}>
+                    {/* Row task details */}
+                    <div 
+                      className={styles.timelineTaskLabel} 
+                      onClick={() => setViewingTask(task)}
+                    >
+                      <div className={styles.timelineTaskAvatar} title={task.assignedTo.name}>
+                        {task.assignedTo.avatar ? (
+                          <img src={task.assignedTo.avatar} alt="" className={styles.fullImgCover} />
+                        ) : (
+                          task.assignedTo.name.charAt(0)
+                        )}
+                      </div>
+                      <div className={styles.timelineTaskText}>
+                        <span className={styles.timelineTaskTitle}>{task.title}</span>
+                        <span className={styles.timelineTaskSubtitle}>{task.assignedTo.name}</span>
+                      </div>
+                    </div>
+
+                    {/* Timeline Bar spanning across dates */}
+                    <div 
+                      className={styles.timelineBarCell} 
+                      style={{ 
+                        gridColumn: `${colStart} / span ${colSpan}` 
+                      }}
+                    >
+                      <div 
+                        className={styles.timelineBar}
+                        onClick={() => setViewingTask(task)}
+                        style={{ 
+                          backgroundColor: statusColor,
+                          boxShadow: `0 2px 6px ${statusColor}33`
+                        }}
+                      >
+                        <span className={styles.timelineBarLabel}>
+                          {task.title} ({Math.round(colSpan)} {colSpan === 1 ? 'day' : 'days'})
+                        </span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Section: Undated Tasks list */}
+        {undatedTasks.length > 0 && (
+          <div className={styles.undatedContainer}>
+            <h3 className={styles.undatedTitle}>
+              Tasks without Dates ({undatedTasks.length})
+            </h3>
+            <div className={styles.undatedList}>
+              {undatedTasks.map(task => (
+                <div 
+                  key={task._id} 
+                  className={styles.undatedCard}
+                  onClick={() => setViewingTask(task)}
+                >
+                  <div className={styles.undatedCardLeft}>
+                    <span className={styles.undatedCardTitle}>{task.title}</span>
+                    <span className={styles.undatedCardUser}>Assigned to {task.assignedTo.name}</span>
+                  </div>
+                  <span 
+                    className={styles.undatedCardBadge}
+                    style={{ background: getStatusColor(task.status) + '1a', color: getStatusColor(task.status) }}
+                  >
+                    {task.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -467,190 +858,222 @@ export default function TasksPage() {
         </div>
       ) : (
         <main className={styles.mainContent}>
-          {/* LEFT SECTION: KANBAN BOARD */}
-          <section className={styles.taskPanel} style={{ background: 'none', border: 'none', backdropFilter: 'none', padding: 0, overflowX: 'auto' }}>
-            <div className={styles.kanbanBoard}>
-              {stages.map((stage, idx) => {
-                const cleanStage = stage.toLowerCase();
-                const stageTasks = tasks.filter(t => getCleanStatus(t.status) === cleanStage);
-                const isDraggedOver = draggedOverStage === cleanStage;
-                
-                return (
-                  <div key={stage} className={styles.columnWrapper}>
-                    <div 
-                      className={`${styles.kanbanColumn} ${isDraggedOver ? styles.dragOver : ''}`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (draggedOverStage !== cleanStage) setDraggedOverStage(cleanStage);
-                    }}
-                    onDragLeave={() => setDraggedOverStage(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDraggedOverStage(null);
-                      const taskId = e.dataTransfer.getData("taskId");
-                      if (taskId) handleMoveTask(taskId, stage);
-                    }}
-                  >
-                    <div className={styles.columnHeader}>
-                      <div className={styles.columnTitleWrap}>
-                        <div className={styles.columnDot} style={{ background: getStageColor(stage) }}></div>
-                        <h3 className={styles.columnTitle}>{stage}</h3>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span className={styles.columnCount}>{stageTasks.length}</span>
-                        {isAdmin && (
-                          <button 
-                            onClick={() => handleDeleteStage(stage)}
-                            style={{ 
-                              background: 'none', 
-                              border: 'none', 
-                              color: '#ef4444', 
-                              cursor: 'pointer', 
-                              padding: '0.25rem', 
-                              fontSize: '0.85rem', 
-                              display: 'flex', 
-                              opacity: 0.7, 
-                              transition: 'opacity 0.15s, transform 0.1s' 
-                            }}
-                            title="Delete stage"
-                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-                            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
-                            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                          >
-                            🗑️
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className={styles.columnTasksList}>
-                      {stageTasks.length === 0 ? (
-                        <div className={styles.emptyColumnState}>No assignments here.</div>
-                      ) : (
-                        stageTasks.map((task) => {
-                          const isMine = task.assignedTo._id === me?._id;
-                          const canMove = isAdmin || isMine;
-                          
-                          return (
-                            <div 
-                              key={task._id} 
-                              className={styles.kanbanCard}
-                              draggable={canMove}
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData("taskId", task._id);
-                              }}
-                              onClick={() => setViewingTask(task)}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              <div className={styles.cardHeader}>
-                                <h4 className={styles.cardTitle}>{task.title}</h4>
-                              </div>
-                              {task.description && <p className={styles.cardDesc}>{task.description}</p>}
-
-                              {/* Task Metadata Indicators */}
-                              {(task.dueDate || (task.checklist && task.checklist.length > 0)) && (
-                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                                  {task.dueDate && (
-                                    <span style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(245, 158, 11, 0.12)', color: '#fbbf24', padding: '0.15rem 0.45rem', borderRadius: '6px', fontWeight: 600 }}>
-                                      📅 {new Date(task.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                                    </span>
-                                  )}
-                                  {task.checklist && task.checklist.length > 0 && (
-                                    <span style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc', padding: '0.15rem 0.45rem', borderRadius: '6px', fontWeight: 600 }}>
-                                      ☑️ {task.checklist.filter(c => c.completed).length}/{task.checklist.length}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Clickable Attachments Inline */}
-                              {task.attachments && task.attachments.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.35rem' }} onMouseDown={(e) => e.stopPropagation()}>
-                                  {task.attachments.map((att, attIdx) => (
-                                    <a 
-                                      key={attIdx}
-                                      href={att.url.startsWith('http') ? att.url : `https://${att.url}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      style={{
-                                        fontSize: '0.68rem',
-                                        fontWeight: 500,
-                                        background: 'rgba(16, 185, 129, 0.1)',
-                                        color: '#34d399',
-                                        padding: '0.15rem 0.4rem',
-                                        borderRadius: '4px',
-                                        border: '1px solid rgba(16, 185, 129, 0.15)',
-                                        textDecoration: 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.2rem'
+          {currentView === 'timeline' ? (
+            renderTimelineView()
+          ) : (
+            /* LEFT SECTION: KANBAN BOARD */
+            <section className={styles.taskPanel} style={{ background: 'none', border: 'none', backdropFilter: 'none', padding: 0, overflowX: 'auto' }}>
+              <div className={styles.kanbanBoard}>
+                {stages.map((stage, idx) => {
+                  const cleanStage = stage.toLowerCase();
+                  const stageTasks = tasks.filter(t => getCleanStatus(t.status) === cleanStage);
+                  const isDraggedOver = draggedOverStage === cleanStage;
+                  
+                  return (
+                    <div key={stage} className={styles.columnWrapper}>
+                      <div 
+                        className={`${styles.kanbanColumn} ${isDraggedOver ? styles.dragOver : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (draggedOverStage !== cleanStage) setDraggedOverStage(cleanStage);
+                        }}
+                        onDragLeave={() => setDraggedOverStage(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDraggedOverStage(null);
+                          const stageIdxStr = e.dataTransfer.getData("stageIdx");
+                          const taskId = e.dataTransfer.getData("taskId");
+                          if (stageIdxStr) {
+                            const fromIdx = parseInt(stageIdxStr, 10);
+                            const toIdx = idx;
+                            if (!isNaN(fromIdx) && fromIdx !== toIdx) {
+                              const updatedStages = [...stages];
+                              const [removed] = updatedStages.splice(fromIdx, 1);
+                              updatedStages.splice(toIdx, 0, removed);
+                              setStages(updatedStages);
+                              api.patch('/tasks/stages/reorder', { stages: updatedStages })
+                                .then(() => {
+                                  handleShowAlert('success', 'Stage order updated!');
+                                })
+                                .catch(err => {
+                                  console.error('Failed to reorder stages', err);
+                                  handleShowAlert('error', 'Failed to save stage order.');
+                                  loadData();
+                                });
+                            }
+                          } else if (taskId) {
+                            handleMoveTask(taskId, stage);
+                          }
+                        }}
+                      >
+                        <div 
+                          className={styles.columnHeader}
+                          draggable={isAdmin}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("stageIdx", idx.toString());
+                          }}
+                          style={{ cursor: isAdmin ? 'grab' : 'default' }}
+                        >
+                          <div className={styles.columnTitleWrap}>
+                            <div className={styles.columnDot} style={{ background: getStageColor(stage) }}></div>
+                            <h3 className={styles.columnTitle}>{stage}</h3>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                            <span className={styles.columnCount}>{stageTasks.length}</span>
+                            {isAdmin && (
+                              <>
+                                <button 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setActiveMenuStage(activeMenuStage === stage ? null : stage);
+                                  }}
+                                  className={styles.menuBtn}
+                                  title="Stage options"
+                                >
+                                  •••
+                                </button>
+                                {activeMenuStage === stage && (
+                                  <div className={styles.columnDropdown} onClick={(e) => e.stopPropagation()}>
+                                    <button 
+                                      onClick={() => {
+                                        handleDeleteStage(stage);
+                                        setActiveMenuStage(null);
                                       }}
                                     >
-                                      🔗 {att.name}
-                                    </a>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              <div className={styles.cardMetaRow}>
-                                <div className={styles.cardAssignee}>
-                                  <div className={styles.cardAvatar} title={task.assignedTo.name}>
-                                    {task.assignedTo.avatar ? (
-                                      <img src={task.assignedTo.avatar} alt="" className={styles.fullImgCover} />
-                                    ) : (
-                                      task.assignedTo.name.charAt(0)
-                                    )}
+                                      Delete Stage
+                                    </button>
                                   </div>
-                                  <span className={styles.cardAssigneeName}>{isMine ? 'You' : task.assignedTo.name}</span>
-                                </div>
-                                <span className={styles.cardDate}>{formatTime(task.createdAt)}</span>
-                              </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      
+                        <div className={styles.columnTasksList}>
+                          {stageTasks.length === 0 ? (
+                            <div className={styles.emptyColumnState}>No assignments here.</div>
+                          ) : (
+                            stageTasks.map((task) => {
+                              const isMine = task.assignedTo._id === me?._id;
+                              const canMove = isAdmin || isMine;
+                              
+                              return (
+                                <div 
+                                  key={task._id} 
+                                  className={styles.kanbanCard}
+                                  draggable={canMove}
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("taskId", task._id);
+                                  }}
+                                  onClick={() => setViewingTask(task)}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <div className={styles.cardHeader}>
+                                    <h4 className={styles.cardTitle}>{task.title}</h4>
+                                  </div>
+                                  {task.description && <p className={styles.cardDesc}>{task.description}</p>}
 
-                              {canMove && (
-                                <div className={styles.cardControls} onClick={(e) => e.stopPropagation()}>
-                                  <CustomSelect 
-                                    variant="small"
-                                    value={stage} 
-                                    onChange={(val) => handleMoveTask(task._id, val)}
-                                    options={stages.map(s => ({ value: s, label: `Move: ${s}` }))}
-                                    placeholder="Move stage..."
-                                  />
+                                  {/* Task Metadata Indicators */}
+                                  {(task.dueDate || (task.checklist && task.checklist.length > 0) || (task.attachments && task.attachments.length > 0)) && (
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                                      {task.dueDate && (
+                                        <span style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(234, 88, 12, 0.08)', color: '#ea580c', padding: '0.2rem 0.55rem', borderRadius: '20px', fontWeight: 600 }}>
+                                          <svg fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" style={{ width: '10px', height: '10px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6v6m-3-3h6" /></svg>
+                                          {new Date(task.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      )}
+                                      {task.checklist && task.checklist.length > 0 && (
+                                        <span style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(234, 88, 12, 0.08)', color: '#ea580c', padding: '0.2rem 0.55rem', borderRadius: '20px', fontWeight: 600 }}>
+                                          <svg fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" style={{ width: '10px', height: '10px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                          {task.checklist.filter(c => c.completed).length}/{task.checklist.length}
+                                        </span>
+                                      )}
+                                      {task.attachments && task.attachments.map((att, attIdx) => (
+                                        <a 
+                                          key={attIdx}
+                                          href={att.url.startsWith('http') ? att.url : `https://${att.url}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          style={{
+                                            fontSize: '0.7rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            background: 'rgba(234, 88, 12, 0.08)',
+                                            color: '#ea580c',
+                                            padding: '0.2rem 0.55rem',
+                                            borderRadius: '20px',
+                                            fontWeight: 600,
+                                            textDecoration: 'none'
+                                          }}
+                                        >
+                                          <svg fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" style={{ width: '10px', height: '10px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                                          {att.name}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                  
+                                  <div className={styles.cardMetaRow}>
+                                    <div className={styles.cardAssignee}>
+                                      <div className={styles.cardAvatar} title={task.assignedTo.name}>
+                                        {task.assignedTo.avatar ? (
+                                          <img src={task.assignedTo.avatar} alt="" className={styles.fullImgCover} />
+                                        ) : (
+                                          task.assignedTo.name.charAt(0)
+                                        )}
+                                      </div>
+                                      <span className={styles.cardAssigneeName}>{isMine ? 'You' : task.assignedTo.name}</span>
+                                    </div>
+                                    <span className={styles.cardDate}>{formatTime(task.createdAt)}</span>
+                                  </div>
+
+                                  {canMove && (
+                                    <div className={styles.cardControls} onClick={(e) => e.stopPropagation()}>
+                                      <CustomSelect 
+                                        variant="small"
+                                        value={stage} 
+                                        onChange={(val) => handleMoveTask(task._id, val)}
+                                        options={stages.map(s => ({ value: s, label: `Move: ${s}` }))}
+                                        placeholder="Move stage..."
+                                      />
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                      {idx === 0 && isAdmin && (
+                        <div className={styles.addStageColumn} onClick={() => setShowAddStage(true)}>
+                          <div className={styles.addStagePlus}>+</div>
+                          <span className={styles.addStageText}>Create Stage</span>
+                        </div>
                       )}
                     </div>
-                  </div>
-                  {idx === 0 && isAdmin && (
-                      <div className={styles.addStageColumn} onClick={() => setShowAddStage(true)}>
-                        <div className={styles.addStagePlus}>+</div>
-                        <span className={styles.addStageText}>Create Stage</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </main>
       )}
 
-
-
       {/* ===================== MODAL: ASSIGN TASK ===================== */}
-      {showAssignTask && (
-        <div className={styles.backdrop}>
-          <div className={styles.modal}>
+      {mounted && showAssignTask && createPortal(
+        <div className={`${styles.backdrop} ${isClosingAssign ? styles.closingBackdrop : ''}`} onClick={closeAssignTask}>
+          <div className={`${styles.taskModalDrawer} ${isClosingAssign ? styles.closingTaskModalDrawer : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>📝 Assign Task Directive</h3>
-              <button onClick={() => setShowAssignTask(false)} className={styles.modalCloseBtn}>×</button>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '18px', height: '18px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                Assign Task Directive
+              </h3>
+              <button onClick={closeAssignTask} className={styles.modalCloseBtn}>×</button>
             </div>
-            <form onSubmit={handleAssignTask} className={styles.form}>
+            <form onSubmit={handleAssignTask} className={styles.taskModalDrawerForm}>
               <div className={styles.modalScrollableBody}>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Direct Target</label>
@@ -883,7 +1306,10 @@ export default function TasksPage() {
                     <div className={styles.builderList}>
                       {checklist.map((item, idx) => (
                         <div key={idx} className={styles.builderItem}>
-                          <span>☑️ {item.text}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {item.text}
+                          </span>
                           <button type="button" className={styles.builderItemBtn} onClick={() => removeChecklistItem(idx)}>×</button>
                         </div>
                       ))}
@@ -917,7 +1343,10 @@ export default function TasksPage() {
                     <div className={styles.builderList}>
                       {attachments.map((att, idx) => (
                         <div key={idx} className={styles.builderItem}>
-                          <span>🔗 <a href={att.url} target="_blank" rel="noreferrer" className={styles.attachmentLink}>{att.name}</a></span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                            <a href={att.url} target="_blank" rel="noreferrer" className={styles.attachmentLink}>{att.name}</a>
+                          </span>
                           <button type="button" className={styles.builderItemBtn} onClick={() => removeAttachment(idx)}>×</button>
                         </div>
                       ))}
@@ -927,242 +1356,517 @@ export default function TasksPage() {
               </div>
 
               <div className={styles.modalFooter}>
-                <button type="button" onClick={() => setShowAssignTask(false)} className={styles.secondaryBtn}>Cancel</button>
+                <button type="button" onClick={closeAssignTask} className={styles.secondaryBtn}>Cancel</button>
                 <button type="submit" disabled={submittingTask} className={styles.primaryBtn}>
                   {submittingTask ? 'Dispatching...' : 'Dispatch Task'}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* ===================== MODAL: CREATE STAGE ===================== */}
-      {showAddStage && (
-        <div className={styles.backdrop}>
-          <div className={styles.modal}>
+      {mounted && showAddStage && createPortal(
+        <div className={`${styles.backdrop} ${isClosingAddStage ? styles.closingBackdrop : ''}`} onClick={closeAddStage}>
+          <div className={`${styles.taskModalDrawer} ${isClosingAddStage ? styles.closingTaskModalDrawer : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>✨ Create Custom Kanban Stage</h3>
-              <button onClick={() => setShowAddStage(false)} className={styles.modalCloseBtn}>×</button>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '18px', height: '18px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                Create Custom Kanban Stage
+              </h3>
+              <button onClick={closeAddStage} className={styles.modalCloseBtn}>×</button>
             </div>
-            <form onSubmit={handleCreateStage} className={styles.form}>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Stage Name</label>
-                <input
-                  type="text"
-                  className={styles.formInput}
-                  placeholder="e.g., Blocked, Testing, Q/A"
-                  value={newStageName}
-                  onChange={(e) => setNewStageName(e.target.value)}
-                  maxLength={40}
-                  required
-                />
+            <form onSubmit={handleCreateStage} className={styles.taskModalDrawerForm}>
+              <div style={{ flex: 1 }}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Stage Name</label>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    placeholder="e.g., Blocked, Testing, Q/A"
+                    value={newStageName}
+                    onChange={(e) => setNewStageName(e.target.value)}
+                    maxLength={40}
+                    required
+                  />
+                </div>
               </div>
               <div className={styles.modalFooter}>
-                <button type="button" onClick={() => setShowAddStage(false)} className={styles.secondaryBtn}>Cancel</button>
+                <button type="button" onClick={closeAddStage} className={styles.secondaryBtn}>Cancel</button>
                 <button type="submit" className={styles.primaryBtn}>
                   Create Stage
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {/* ===================== MODAL: VIEW TASK DETAILS ===================== */}
-      {viewingTask && (
-        <div className={styles.backdrop} onClick={() => setViewingTask(null)}>
-          <div className={styles.modal} style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
+      {mounted && viewingTask && createPortal(
+        <div className={`${styles.backdrop} ${isClosingViewing ? styles.closingBackdrop : ''}`} onClick={closeViewingTask}>
+          <div className={`${styles.taskModalDrawer} ${isClosingViewing ? styles.closingTaskModalDrawer : ''}`} style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>📋</span>
-                <div>
-                  <h3 style={{ margin: 0 }}>{viewingTask.title}</h3>
-                  <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
-                    in column <strong style={{ color: '#fbbf24', textTransform: 'uppercase' }}>{viewingTask.status}</strong>
-                  </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '22px', height: '22px', color: 'var(--primary)' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <div style={{ flex: 1 }}>
+                  {isEditingTask ? (
+                    <h3 style={{ margin: 0 }}>Edit Task Directive</h3>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h3 style={{ margin: 0 }}>{viewingTask.title}</h3>
+                        {isAdmin && (
+                          <button 
+                            onClick={startEditingTask} 
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center' }}
+                            title="Edit Title"
+                          >
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
+                        in column <strong style={{ color: '#ea580c', textTransform: 'uppercase' }}>{viewingTask.status}</strong>
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
-              <button onClick={() => setViewingTask(null)} className={styles.modalCloseBtn}>×</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button onClick={closeViewingTask} className={styles.modalCloseBtn}>×</button>
+              </div>
             </div>
 
-            <div className={styles.modalScrollableBody} style={{ paddingTop: '0.5rem' }}>
-              {/* Assignment Info */}
-              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <div>
-                  <label className={styles.builderLabel}>Assigned To</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <div className={styles.cardAvatar} style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}>
-                      {viewingTask.assignedTo.avatar ? (
-                        <img src={viewingTask.assignedTo.avatar} className={styles.fullImgCover} alt="" />
-                      ) : (
-                        viewingTask.assignedTo.name.charAt(0)
-                      )}
-                    </div>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{viewingTask.assignedTo.name}</span>
+            {isEditingTask ? (
+              <form onSubmit={handleSaveTaskEdit} className={styles.taskModalDrawerForm}>
+                <div className={styles.modalScrollableBody} style={{ paddingTop: '0.5rem' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Task Title</label>
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      required
+                    />
                   </div>
-                </div>
-                <div>
-                  <label className={styles.builderLabel}>Assigned By</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <div className={styles.cardAvatar} style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #475569, #64748b)', fontSize: '0.8rem' }}>
-                      {viewingTask.assignedBy.avatar ? (
-                        <img src={viewingTask.assignedBy.avatar} className={styles.fullImgCover} alt="" />
-                      ) : (
-                        viewingTask.assignedBy.name.charAt(0)
-                      )}
-                    </div>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{viewingTask.assignedBy.name}</span>
+                  
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Description</label>
+                    <textarea
+                      className={styles.formTextarea}
+                      style={{ minHeight: '100px' }}
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                    />
                   </div>
-                </div>
-              </div>
 
-              {/* Revision Notes Feedback Callout */}
-              {viewingTask.revisionNotes && (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '0.5rem', 
-                  background: 'rgba(239, 68, 68, 0.08)', 
-                  border: '1px solid rgba(239, 68, 68, 0.2)', 
-                  padding: '1rem', 
-                  borderRadius: '12px',
-                  marginTop: '0.25rem'
-                }}>
-                  <label className={styles.builderLabel} style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    🚩 Super Admin Revision Feedback
-                  </label>
-                  <p style={{ fontSize: '0.88rem', color: '#fca5a5', margin: 0, fontStyle: 'italic', lineHeight: 1.6 }}>
-                    "{viewingTask.revisionNotes}"
-                  </p>
-                </div>
-              )}
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Assigned To</label>
+                    <CustomSelect
+                      value={editAssignedTo}
+                      onChange={setEditAssignedTo}
+                      options={members.map(m => ({ value: m._id, label: `${m.name} (@${m.username || 'member'})` }))}
+                    />
+                  </div>
 
-              {/* Description */}
-              {viewingTask.description && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label className={styles.builderLabel}>Description</label>
-                  <p style={{ fontSize: '0.9rem', color: '#cbd5e1', whiteSpace: 'pre-wrap', margin: 0, background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)', lineHeight: 1.6 }}>
-                    {viewingTask.description}
-                  </p>
-                </div>
-              )}
+                  <div className={styles.dateGrid}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.formLabel}>Start Date</label>
+                      <input
+                        type="datetime-local"
+                        className={styles.formInput}
+                        value={editStart}
+                        onChange={(e) => setEditStart(e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.formLabel}>Due Date</label>
+                      <input
+                        type="datetime-local"
+                        className={styles.formInput}
+                        value={editDue}
+                        onChange={(e) => setEditDue(e.target.value)}
+                      />
+                    </div>
+                  </div>
 
-              {/* Dates Details */}
-              {(viewingTask.startDate || viewingTask.dueDate) && (
-                <div className={styles.dateGrid}>
-                  {viewingTask.startDate && (
-                    <div className={styles.builderSection}>
-                      <label className={styles.builderLabel}>Start Date</label>
-                      <div style={{ fontSize: '0.9rem', color: '#e2e8f0', fontWeight: 600 }}>
-                        📅 {new Date(viewingTask.startDate).toLocaleDateString([], { dateStyle: 'medium' })} 
-                        <span style={{ color: '#64748b', marginLeft: '0.5rem' }}>
-                          {new Date(viewingTask.startDate).toLocaleTimeString([], { timeStyle: 'short' })}
-                        </span>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Reminder At</label>
+                    <input
+                      type="datetime-local"
+                      className={styles.formInput}
+                      value={editReminder}
+                      onChange={(e) => setEditReminder(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Edit Checklist Section */}
+                  <div className={styles.builderSection}>
+                    <label className={styles.builderLabel}>Checklist Items ({editChecklist.length})</label>
+                    <div className={styles.builderInputRow}>
+                      <input 
+                        type="text" 
+                        placeholder="Add a checklist step..." 
+                        className={styles.formInput} 
+                        value={editNewChecklistItem}
+                        onChange={(e) => setEditNewChecklistItem(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditChecklistItem(); } }}
+                      />
+                      <button type="button" onClick={addEditChecklistItem} className={styles.primaryBtn} style={{ padding: '0.5rem 1rem' }}>Add</button>
+                    </div>
+                    {editChecklist.length > 0 && (
+                      <div className={styles.builderList}>
+                        {editChecklist.map((item, idx) => (
+                          <div key={idx} className={styles.builderItem}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <input 
+                                type="checkbox"
+                                className={styles.checkboxInput}
+                                checked={item.completed}
+                                onChange={(e) => {
+                                  const updated = [...editChecklist];
+                                  updated[idx] = { ...updated[idx], completed: e.target.checked };
+                                  setEditChecklist(updated);
+                                }}
+                                style={{ width: '14px', height: '14px', marginRight: '0.25rem' }}
+                              />
+                              <span style={{ textDecoration: item.completed ? 'line-through' : 'none', color: item.completed ? '#64748b' : 'var(--text-color)' }}>
+                                {item.text}
+                              </span>
+                            </span>
+                            <button type="button" className={styles.builderItemBtn} onClick={() => removeEditChecklistItem(idx)}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Edit Attachments Section */}
+                  <div className={styles.builderSection}>
+                    <label className={styles.builderLabel}>Attachments / External Links ({editAttachments.length})</label>
+                    <div className={styles.builderInputRow}>
+                      <input 
+                        type="text" 
+                        placeholder="Link Display Text (e.g. Drive Link)" 
+                        className={styles.formInput}
+                        style={{ flex: 1 }} 
+                        value={editAttachmentText}
+                        onChange={(e) => setEditAttachmentText(e.target.value)} 
+                      />
+                      <input 
+                        type="text" 
+                        placeholder="URL (http://...)" 
+                        className={styles.formInput}
+                        style={{ flex: 2 }} 
+                        value={editAttachmentUrl}
+                        onChange={(e) => setEditAttachmentUrl(e.target.value)} 
+                      />
+                      <button type="button" onClick={addEditAttachment} className={styles.primaryBtn} style={{ padding: '0.5rem 1rem' }}>Attach</button>
+                    </div>
+                    {editAttachments.length > 0 && (
+                      <div className={styles.builderList}>
+                        {editAttachments.map((att, idx) => (
+                          <div key={idx} className={styles.builderItem}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                              <a href={att.url.startsWith('http') ? att.url : `https://${att.url}`} target="_blank" rel="noreferrer" className={styles.attachmentLink} onClick={(e) => e.stopPropagation()}>{att.name}</a>
+                            </span>
+                            <button type="button" className={styles.builderItemBtn} onClick={() => removeEditAttachment(idx)}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+                <div className={styles.modalFooter} style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '1rem' }}>
+                  <button type="button" onClick={cancelEditingTask} className={styles.secondaryBtn} disabled={submittingEdit}>Cancel</button>
+                  <button type="submit" className={styles.primaryBtn} disabled={submittingEdit}>
+                    {submittingEdit ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className={styles.modalScrollableBody} style={{ paddingTop: '0.5rem' }}>
+                  {/* Assignment Info */}
+                  <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <label className={styles.builderLabel}>Assigned To</label>
+                        {isAdmin && (
+                          <button 
+                            onClick={startEditingTask} 
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem 0.25rem 0.25rem', display: 'inline-flex', alignItems: 'center' }}
+                            title="Edit Assignee"
+                          >
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                        <div className={styles.cardAvatar} style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}>
+                          {viewingTask.assignedTo.avatar ? (
+                            <img src={viewingTask.assignedTo.avatar} className={styles.fullImgCover} alt="" />
+                          ) : (
+                            viewingTask.assignedTo.name.charAt(0)
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{viewingTask.assignedTo.name}</span>
                       </div>
                     </div>
-                  )}
-                  {viewingTask.dueDate && (
-                    <div className={styles.builderSection}>
-                      <label className={styles.builderLabel}>Due Date</label>
-                      <div style={{ fontSize: '0.9rem', color: '#fbbf24', fontWeight: 600 }}>
-                        ⏱️ {new Date(viewingTask.dueDate).toLocaleDateString([], { dateStyle: 'medium' })} 
-                        <span style={{ color: '#64748b', marginLeft: '0.5rem' }}>
-                          {new Date(viewingTask.dueDate).toLocaleTimeString([], { timeStyle: 'short' })}
-                        </span>
+                    <div>
+                      <label className={styles.builderLabel}>Assigned By</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+                        <div className={styles.cardAvatar} style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #475569, #64748b)', fontSize: '0.8rem' }}>
+                          {viewingTask.assignedBy.avatar ? (
+                            <img src={viewingTask.assignedBy.avatar} className={styles.fullImgCover} alt="" />
+                          ) : (
+                            viewingTask.assignedBy.name.charAt(0)
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{viewingTask.assignedBy.name}</span>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {viewingTask.reminderAt && (
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.08)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
-                  🔔 <strong>Reminder set for:</strong> {new Date(viewingTask.reminderAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                </div>
-              )}
-
-              {/* Checklist Container */}
-              {viewingTask.checklist && viewingTask.checklist.length > 0 && (
-                <div className={styles.builderSection}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className={styles.builderLabel}>Checklist</label>
-                    <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 700 }}>
-                      {Math.round((viewingTask.checklist.filter(c => c.completed).length / viewingTask.checklist.length) * 100)}% Done
-                    </span>
                   </div>
-                  {/* Progress Bar */}
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+
+                  {/* Revision Notes Feedback Callout */}
+                  {viewingTask.revisionNotes && (
                     <div style={{ 
-                      height: '100%', 
-                      background: '#6366f1', 
-                      width: `${(viewingTask.checklist.filter(c => c.completed).length / viewingTask.checklist.length) * 100}%`,
-                      transition: 'width 0.3s ease'
-                    }} />
-                  </div>
-                  <div className={styles.builderList} style={{ marginTop: '0.5rem' }}>
-                    {viewingTask.checklist.map((item, idx) => {
-                      const isMine = viewingTask.assignedTo._id === me?._id;
-                      const canCheck = isAdmin || isMine;
-                      return (
-                        <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '8px', cursor: canCheck ? 'pointer' : 'default', background: 'rgba(255,255,255,0.02)' }} onClick={(e) => e.stopPropagation()}>
-                          <input 
-                            type="checkbox" 
-                            className={styles.checkboxInput}
-                            checked={item.completed}
-                            disabled={!canCheck}
-                            onChange={() => handleToggleChecklistItem(viewingTask, idx)}
-                            style={{ width: '16px', height: '16px' }}
-                          />
-                          <span style={{ fontSize: '0.9rem', color: item.completed ? '#64748b' : '#e2e8f0', textDecoration: item.completed ? 'line-through' : 'none' }}>
-                            {item.text}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '0.5rem', 
+                      background: 'rgba(239, 68, 68, 0.08)', 
+                      border: '1px solid rgba(239, 68, 68, 0.2)', 
+                      padding: '1rem', 
+                      borderRadius: '12px',
+                      marginTop: '0.25rem'
+                    }}>
+                      <label className={styles.builderLabel} style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" /></svg>
+                        Super Admin Revision Feedback
+                      </label>
+                      <p style={{ fontSize: '0.88rem', color: '#ef4444', margin: 0, fontStyle: 'italic', lineHeight: 1.6 }}>
+                        "{viewingTask.revisionNotes}"
+                      </p>
+                    </div>
+                  )}
 
-              {/* Attachments */}
-              {viewingTask.attachments && viewingTask.attachments.length > 0 && (
-                <div className={styles.builderSection}>
-                  <label className={styles.builderLabel}>Attachments ({viewingTask.attachments.length})</label>
-                  <div className={styles.builderList}>
-                    {viewingTask.attachments.map((att, idx) => (
-                      <a 
-                        key={idx} 
-                        href={att.url.startsWith('http') ? att.url : `https://${att.url}`} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className={styles.builderItem} 
-                        style={{ textDecoration: 'none' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span style={{ color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                          🔗 {att.name}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }}>
-                          {att.url}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+                  {/* Description */}
+                  {viewingTask.description && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <label className={styles.builderLabel}>Description</label>
+                        {isAdmin && (
+                          <button 
+                            onClick={startEditingTask} 
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem 0.25rem 0.25rem', display: 'inline-flex', alignItems: 'center' }}
+                            title="Edit Description"
+                          >
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      <p style={{ fontSize: '0.9rem', color: 'var(--text-color)', whiteSpace: 'pre-wrap', margin: 0, background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', lineHeight: 1.6 }}>
+                        {viewingTask.description}
+                      </p>
+                    </div>
+                  )}
 
-            <div className={styles.modalFooter} style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '1rem', marginTop: '1rem' }}>
-              <button onClick={() => setViewingTask(null)} className={styles.primaryBtn}>Close Details</button>
-            </div>
+                  {/* Dates Details */}
+                  {(viewingTask.startDate || viewingTask.dueDate) && (
+                    <div className={styles.dateGrid}>
+                      {viewingTask.startDate && (
+                        <div className={styles.builderSection}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <label className={styles.builderLabel}>Start Date</label>
+                            {isAdmin && (
+                              <button 
+                                onClick={startEditingTask} 
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem 0.25rem 0.25rem', display: 'inline-flex', alignItems: 'center' }}
+                                title="Edit Dates"
+                              >
+                                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.9rem', color: 'var(--text-color)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '14px', height: '14px', color: 'var(--text-muted)' }}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6v6m-3-3h6" /></svg>
+                            {new Date(viewingTask.startDate).toLocaleDateString([], { dateStyle: 'medium' })} 
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                              {new Date(viewingTask.startDate).toLocaleTimeString([], { timeStyle: 'short' })}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {viewingTask.dueDate && (
+                        <div className={styles.builderSection}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <label className={styles.builderLabel}>Due Date</label>
+                            {isAdmin && (
+                              <button 
+                                onClick={startEditingTask} 
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.25rem 0.25rem 0.25rem', display: 'inline-flex', alignItems: 'center' }}
+                                title="Edit Dates"
+                              >
+                                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.9rem', color: '#ea580c', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '14px', height: '14px', color: '#ea580c' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {new Date(viewingTask.dueDate).toLocaleDateString([], { dateStyle: 'medium' })} 
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                              {new Date(viewingTask.dueDate).toLocaleTimeString([], { timeStyle: 'short' })}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {viewingTask.reminderAt && (
+                    <div style={{ fontSize: '0.8rem', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff7ed', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(234, 88, 12, 0.15)' }}>
+                      <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '14px', height: '14px', color: '#ea580c' }}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a3 3 0 11-5.714 0" /></svg>
+                      <strong>Reminder set for:</strong> {new Date(viewingTask.reminderAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    </div>
+                  )}
+
+                  {/* Checklist Container */}
+                  {viewingTask.checklist && viewingTask.checklist.length > 0 && (
+                    <div className={styles.builderSection}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label className={styles.builderLabel}>Checklist</label>
+                        <span style={{ fontSize: '0.75rem', color: '#ea580c', fontWeight: 700 }}>
+                          {Math.round((viewingTask.checklist.filter(c => c.completed).length / viewingTask.checklist.length) * 100)}% Done
+                        </span>
+                      </div>
+                      {/* Progress Bar */}
+                      <div style={{ height: '6px', background: 'rgba(0,0,0,0.05)', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          height: '100%', 
+                          background: '#ea580c', 
+                          width: `${(viewingTask.checklist.filter(c => c.completed).length / viewingTask.checklist.length) * 100}%`,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div className={styles.builderList} style={{ marginTop: '0.5rem' }}>
+                        {viewingTask.checklist.map((item, idx) => {
+                          const isMine = viewingTask.assignedTo._id === me?._id;
+                          const canCheck = isAdmin || isMine;
+                          return (
+                            <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: '8px', cursor: canCheck ? 'pointer' : 'default', background: 'rgba(0,0,0,0.01)' }} onClick={(e) => e.stopPropagation()}>
+                              <input 
+                                type="checkbox" 
+                                className={styles.checkboxInput}
+                                checked={item.completed}
+                                disabled={!canCheck}
+                                onChange={() => handleToggleChecklistItem(viewingTask, idx)}
+                                style={{ width: '16px', height: '16px' }}
+                              />
+                              <span style={{ fontSize: '0.9rem', color: item.completed ? '#64748b' : 'var(--text-color)', textDecoration: item.completed ? 'line-through' : 'none' }}>
+                                {item.text}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {viewingTask.attachments && viewingTask.attachments.length > 0 && (
+                    <div className={styles.builderSection}>
+                      <label className={styles.builderLabel}>Attachments ({viewingTask.attachments.length})</label>
+                      <div className={styles.builderList}>
+                        {viewingTask.attachments.map((att, idx) => (
+                          <a 
+                            key={idx} 
+                            href={att.url.startsWith('http') ? att.url : `https://${att.url}`} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className={styles.builderItem} 
+                            style={{ textDecoration: 'none', background: '#f8fafc', border: '1px solid var(--border-color)' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span style={{ color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                              {att.name}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }}>
+                              {att.url}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Comments Section */}
+                  <div className={styles.commentsSection}>
+                    <label className={styles.commentsTitle}>Comments ({viewingTask.comments?.length || 0})</label>
+                    
+                    <div className={styles.commentsList}>
+                      {viewingTask.comments && viewingTask.comments.length > 0 ? (
+                        viewingTask.comments.map((comment, cIdx) => (
+                          <div key={cIdx} className={styles.commentItem}>
+                            <div className={styles.commentHeader}>
+                              <div className={styles.commentUser}>
+                                <div className={styles.cardAvatar} style={{ width: '20px', height: '20px', fontSize: '0.6rem' }}>
+                                  {comment.userId?.avatar ? (
+                                    <img src={comment.userId.avatar} className={styles.fullImgCover} alt="" />
+                                  ) : (
+                                    comment.userId?.name?.charAt(0) || 'U'
+                                  )}
+                                </div>
+                                <span className={styles.commentUserName}>{comment.userId?.name || 'User'}</span>
+                              </div>
+                              <span className={styles.commentDate}>{formatTime(comment.createdAt)}</span>
+                            </div>
+                            <p className={styles.commentText}>{comment.text}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic', margin: 0 }}>No comments posted yet.</p>
+                      )}
+                    </div>
+
+                    <form onSubmit={handleAddComment} className={styles.commentForm} onClick={(e) => e.stopPropagation()}>
+                      <textarea
+                        className={styles.commentInput}
+                        placeholder="Write a comment..."
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className={styles.commentSubmitBtn} disabled={submittingComment}>
+                        {submittingComment ? 'Posting...' : 'Comment'}
+                      </button>
+                    </form>
+                  </div>
+
+                </div>
+                <div className={styles.modalFooter} style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '1rem' }}>
+                  <button onClick={closeViewingTask} className={styles.primaryBtn}>Close Details</button>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* ===================== MODAL: REVISION FEEDBACK DIALOG ===================== */}
-      {showRevisionDialog && (
-        <div className={styles.backdrop}>
-          <div className={styles.modal} style={{ maxWidth: '500px' }}>
+      {mounted && showRevisionDialog && createPortal(
+        <div className={`${styles.backdrop} ${isClosingRevision ? styles.closingBackdrop : ''}`} onClick={closeRevisionDialog}>
+          <div className={`${styles.taskModalDrawer} ${isClosingRevision ? styles.closingTaskModalDrawer : ''}`} style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>🚩 Push Task back to Revision</h3>
-              <button onClick={() => { setShowRevisionDialog(false); setPendingRevisionTaskId(''); }} className={styles.modalCloseBtn}>×</button>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '18px', height: '18px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" /></svg>
+                Push Task back to Revision
+              </h3>
+              <button onClick={closeRevisionDialog} className={styles.modalCloseBtn}>×</button>
             </div>
             <div className={styles.modalScrollableBody}>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5, marginTop: 0 }}>
@@ -1183,7 +1887,7 @@ export default function TasksPage() {
             <div className={styles.modalFooter}>
               <button 
                 type="button" 
-                onClick={() => { setShowRevisionDialog(false); setPendingRevisionTaskId(''); }} 
+                onClick={closeRevisionDialog} 
                 className={styles.secondaryBtn}
               >
                 Cancel
@@ -1198,7 +1902,8 @@ export default function TasksPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -31,7 +31,17 @@ export default function SecurityPage() {
   const [setupDeviceName, setSetupDeviceName] = useState('');
   const [setupStep, setSetupStep] = useState(1); // 1 = Device Name input, 2 = Scan QR & Code Entry
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isClosingConfirm, setIsClosingConfirm] = useState(false);
   const [deviceToRevoke, setDeviceToRevoke] = useState<any>(null);
+
+  const closeConfirmModal = () => {
+    setIsClosingConfirm(true);
+    setTimeout(() => {
+      setShowConfirmModal(false);
+      setDeviceToRevoke(null);
+      setIsClosingConfirm(false);
+    }, 250);
+  };
 
   useEffect(() => {
     loadUserStatus();
@@ -122,27 +132,33 @@ export default function SecurityPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setSubmitting(true);
-    setShowConfirmModal(false);
     try {
       const res = await api.delete(`/auth/2fa/devices/${deviceToRevoke.id}`);
       
-      if (res.data.twoFactorEnabled === false) {
-        setTwoFactorEnabled(false);
-        setBackupCodes(null);
-        setSuccessMsg(`Device "${deviceToRevoke.deviceName}" has been revoked. Two-Factor Authentication is now disabled.`);
-      } else {
-        setSuccessMsg(`Device "${deviceToRevoke.deviceName}" has been successfully revoked.`);
-      }
-      
-      // Refresh user status
-      const userRes = await api.get('/auth/me');
-      setUser(userRes.data.user);
-      setTwoFactorEnabled(userRes.data.user.twoFactorEnabled);
+      setIsClosingConfirm(true);
+      setTimeout(async () => {
+        setShowConfirmModal(false);
+        setDeviceToRevoke(null);
+        setIsClosingConfirm(false);
+        
+        if (res.data.twoFactorEnabled === false) {
+          setTwoFactorEnabled(false);
+          setBackupCodes(null);
+          setSuccessMsg(`Device "${deviceToRevoke.deviceName}" has been revoked. Two-Factor Authentication is now disabled.`);
+        } else {
+          setSuccessMsg(`Device "${deviceToRevoke.deviceName}" has been successfully revoked.`);
+        }
+        
+        // Refresh user status
+        const userRes = await api.get('/auth/me');
+        setUser(userRes.data.user);
+        setTwoFactorEnabled(userRes.data.user.twoFactorEnabled);
+      }, 250);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Failed to revoke device.');
+      setDeviceToRevoke(null);
     } finally {
       setSubmitting(false);
-      setDeviceToRevoke(null);
     }
   };
 
@@ -248,7 +264,9 @@ export default function SecurityPage() {
         {/* Card 1: Two-Factor Settings Dashboard */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIconWrapper}>🛡️</div>
+            <div className={styles.cardIconWrapper}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+            </div>
             <div>
               <h2 className={styles.cardTitle}>Authenticator 2FA</h2>
               <p className={styles.cardSub}>Protect your admin panel access with a temporary code.</p>
@@ -303,7 +321,7 @@ export default function SecurityPage() {
                       title="Revoke Device"
                       disabled={submitting}
                     >
-                      🗑️
+                      <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                     </button>
                   </div>
                 ))}
@@ -381,7 +399,7 @@ export default function SecurityPage() {
                             className={styles.copyBtn}
                             title="Copy key"
                           >
-                            📋
+                            <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.057 1.123-.08M15.75 18H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08M15.75 18.75v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5A3.375 3.375 0 006.375 7.5H5.25m11.9-3.664A2.251 2.251 0 0015 2.25h-1.5a2.251 2.251 0 00-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 00-9-9z" /></svg>
                           </button>
                         </div>
                       </div>
@@ -452,8 +470,7 @@ export default function SecurityPage() {
                 <button 
                   type="button" 
                   onClick={() => { setIsDisabling(false); setPasswordConfirm(''); setErrorMsg(null); }} 
-                  className={styles.toggleBtn}
-                  style={{ flex: 1, background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.08)' }}
+                  className={styles.modalCancelBtn}
                   disabled={submitting}
                 >
                   Cancel
@@ -488,9 +505,9 @@ export default function SecurityPage() {
                     <span>{code}</span>
                     <button 
                       onClick={() => copyToClipboard(code, idx)} 
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.7 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.7, display: 'flex', alignItems: 'center' }}
                     >
-                      {copiedIndex === idx ? '✓' : '📋'}
+                      {copiedIndex === idx ? '✓' : <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '12px', height: '12px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.057 1.123-.08M15.75 18H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08M15.75 18.75v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5A3.375 3.375 0 006.375 7.5H5.25m11.9-3.664A2.251 2.251 0 0015 2.25h-1.5a2.251 2.251 0 00-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 00-9-9z" /></svg>}
                     </button>
                   </div>
                 ))}
@@ -498,10 +515,12 @@ export default function SecurityPage() {
 
               <div className={styles.backupActions}>
                 <button onClick={downloadBackupCodesFile} className={styles.backupBtn}>
-                  📥 <span className={styles.btnText}>Download as File</span>
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" style={{ width: '14px', height: '14px', marginRight: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                  <span className={styles.btnText}>Download as File</span>
                 </button>
                 <button onClick={() => copyToClipboard(backupCodes.join('\n'))} className={styles.backupBtn}>
-                  📋 <span className={styles.btnText}>Copy All</span>
+                  <svg fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" style={{ width: '14px', height: '14px', marginRight: '6px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.057 1.123-.08M15.75 18H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08M15.75 18.75v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5A3.375 3.375 0 006.375 7.5H5.25m11.9-3.664A2.251 2.251 0 0015 2.25h-1.5a2.251 2.251 0 00-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 00-9-9z" /></svg>
+                  <span className={styles.btnText}>Copy All</span>
                 </button>
               </div>
 
@@ -538,7 +557,9 @@ export default function SecurityPage() {
         {/* Card 2: Security Best Practices Info */}
         <div className={`${styles.card} ${styles.infoCard}`}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIconWrapper}>💡</div>
+            <div className={styles.cardIconWrapper}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m-7.071.071l1.414 1.414m-3.414 6.515H5m.071 7.071l1.414-1.414M12 20v2m5.657-2.929l1.414 1.414m1.515-5.657H20m-2.929-5.657l1.414-1.414" /></svg>
+            </div>
             <div>
               <h2 className={styles.cardTitle}>Security Guidelines</h2>
               <p className={styles.cardSub}>Why administrative 2FA protection is vital.</p>
@@ -564,13 +585,13 @@ export default function SecurityPage() {
 
       {/* Revocation Confirmation Dialog */}
       {showConfirmModal && deviceToRevoke && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
+        <div className={`${styles.modalOverlay} ${isClosingConfirm ? 'closingOverlay' : ''}`} onClick={closeConfirmModal}>
+          <div className={`${styles.modalContent} ${isClosingConfirm ? 'closingContent' : ''}`} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Revoke Authenticator Device</h3>
             <p className={styles.modalBody}>
               {user?.twoFactorDevices?.length === 1 ? (
                 <strong>
-                  ⚠️ WARNING: This is your last registered device. Revoking it will automatically disable Two-Factor Authentication (2FA) for your account, and delete your backup recovery codes.
+                  WARNING: This is your last registered device. Revoking it will automatically disable Two-Factor Authentication (2FA) for your account, and delete your backup recovery codes.
                 </strong>
               ) : (
                 `Are you sure you want to revoke the device "${deviceToRevoke.deviceName}"? You will no longer be able to log in using codes from this device.`
@@ -579,7 +600,7 @@ export default function SecurityPage() {
             <div className={styles.modalActions}>
               <button 
                 type="button" 
-                onClick={() => { setShowConfirmModal(false); setDeviceToRevoke(null); }} 
+                onClick={closeConfirmModal} 
                 className={styles.modalCancelBtn}
                 disabled={submitting}
               >

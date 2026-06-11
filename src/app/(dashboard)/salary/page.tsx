@@ -13,6 +13,7 @@ type SalaryRow = {
   isWeekend: boolean;
   isWorkingDay: boolean;
   hasValidAttendance: boolean;
+  attendanceStatus: 'full' | 'half' | 'absent';
   clockIn: string | null;
   clockOut: string | null;
   earned: number;
@@ -125,7 +126,7 @@ function SalaryPageContent() {
   const [isDownloading, setIsDownloading] = React.useState(false);
   const [error, setError] = React.useState('');
 
-  const { alert, confirm } = useDialog();
+  const { alert, confirm, confirm2fa } = useDialog();
 
   // Custom salary & employee card dropdown states
   const [inputSalary, setInputSalary] = React.useState('10000');
@@ -142,11 +143,24 @@ function SalaryPageContent() {
 
   const handleConfirmSalary = async () => {
     const employeeName = sheet?.employee?.name || 'this employee';
-    const ok = await confirm(`Are you sure you want to change the base monthly salary of ${employeeName}?`);
+
+    // Check if admin has 2FA enabled
+    let has2fa = false;
+    try {
+      const meResp = await api.get('/auth/me');
+      has2fa = !!(meResp.data.user?.twoFactorEnabled);
+    } catch { /* ignore */ }
+
+    const dialogMessage = `You are about to change the base monthly salary of ${employeeName} to ₹${Number(inputSalary).toLocaleString()}. ${has2fa ? 'Verify your identity to continue.' : 'Are you sure?'}`;
+    const dialogTitle = has2fa ? 'Authorize Salary Change' : 'Confirm Salary Change';
+
+    const ok = has2fa
+      ? await confirm2fa(dialogMessage, dialogTitle)
+      : await confirm(dialogMessage, dialogTitle);
+
     if (ok) {
       try {
         setIsLoading(true);
-        // Persistently update employee's base salary in DB
         await api.patch(`/users/${selectedUserId}`, { baseSalary: Number(inputSalary) });
         setReloadTrigger(prev => prev + 1);
       } catch (err: any) {
@@ -321,7 +335,7 @@ function SalaryPageContent() {
         <div>
           <p className={styles.eyebrow}>Monthly Salary Breakdown</p>
           <h1 className={styles.title}>Salary Sheet</h1>
-          <p className={styles.subTitle}>Fixed base salary: 10,000 per month. Weekends are excluded from the daily rate.</p>
+          <p className={styles.subTitle}>Fixed base salary: 10,000 per month. Weekends are excluded from the daily rate. Shifts ≥ 7 hours count as a Full Day, otherwise they count as a Half Day (50% pay).</p>
         </div>
         <div className={styles.actions}>
           <button type="button" className={styles.primaryBtn} onClick={downloadCsv} disabled={!sheet || isDownloading}>
@@ -439,7 +453,7 @@ function SalaryPageContent() {
                     <th>{sortLabel('Date', 'date')}</th>
                     <th>{sortLabel('Day', 'dayName')}</th>
                     <th>{sortLabel('Working Day', 'isWorkingDay')}</th>
-                    <th>{sortLabel('Valid Attendance', 'hasValidAttendance')}</th>
+                    <th>{sortLabel('Attendance Status', 'hasValidAttendance')}</th>
                     <th>{sortLabel('Clock In', 'clockIn')}</th>
                     <th>{sortLabel('Clock Out', 'clockOut')}</th>
                     <th>{sortLabel('Earned', 'earned')}</th>
@@ -447,11 +461,21 @@ function SalaryPageContent() {
                 </thead>
                 <tbody>
                   {sortedRows.map((row) => (
-                    <tr key={row.date} className={row.hasValidAttendance ? styles.presentRow : row.isWeekend ? styles.weekendRow : styles.absentRow}>
+                    <tr key={row.date} className={row.isWeekend ? styles.weekendRow : row.attendanceStatus === 'full' ? styles.presentRow : row.attendanceStatus === 'half' ? styles.halfDayRow : styles.absentRow}>
                       <td>{formatDateDMY(row.date)}</td>
                       <td>{row.dayName}</td>
                       <td>{row.isWorkingDay ? 'Yes' : 'No'}</td>
-                      <td>{row.hasValidAttendance ? 'Yes' : 'No'}</td>
+                      <td>
+                        {row.isWeekend ? (
+                          <span className={`${styles.statusBadge} ${styles.badgeWeekend}`}>Weekend</span>
+                        ) : row.attendanceStatus === 'full' ? (
+                          <span className={`${styles.statusBadge} ${styles.badgeFull}`}>Full Day</span>
+                        ) : row.attendanceStatus === 'half' ? (
+                          <span className={`${styles.statusBadge} ${styles.badgeHalf}`}>Half Day</span>
+                        ) : (
+                          <span className={`${styles.statusBadge} ${styles.badgeAbsent}`}>Absent</span>
+                        )}
+                      </td>
                       <td>{formatDateTime(row.clockIn)}</td>
                       <td>{formatDateTime(row.clockOut)}</td>
                       <td>₹ {formatMoney(row.earned)}</td>

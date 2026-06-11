@@ -1,27 +1,20 @@
 const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+dotenv.config();
 
-const uri = 'mongodb://ThinkX:11006618@ac-oegcwrk-shard-00-01.ytwfy5a.mongodb.net:27017/jibble_clone?ssl=true&authSource=admin&directConnection=true';
+const MONGO_URI = process.env.MONGODB_URI;
 
-async function check() {
-  try {
-    await mongoose.connect(uri);
-    console.log('Connected to DB');
-    
-    const User = mongoose.model('User', new mongoose.Schema({}, { strict: false, collection: 'users' }));
-    const Org = mongoose.model('Organization', new mongoose.Schema({}, { strict: false, collection: 'organizations' }));
-    
-    const users = await User.find({});
-    console.log(`Found ${users.length} users in total:`);
-    for (const u of users) {
-      const org = await Org.findById(u.get('orgId'));
-      console.log(`ID: ${u._id} | Name: ${u.get('name')} | Email: ${u.get('email')} | Role: ${u.get('role')} | Org: ${org ? org.get('name') : 'None'} (${org ? org.get('slug') : 'None'})`);
-    }
-    
-    process.exit(0);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
-  }
+async function run() {
+  await mongoose.connect(MONGO_URI);
+  console.log('Connected to DB');
+
+  const users = await mongoose.connection.db.collection('users').find().toArray();
+  console.log('Users found:', users.length);
+  users.forEach(u => {
+    console.log(`Name: ${u.name} | Email: ${u.email} | Username: ${u.username} | Role: ${u.role} | 2FA: ${u.is2faEnabled}`);
+  });
+
+  await mongoose.disconnect();
 }
 
-check();
+run().catch(console.error);

@@ -266,7 +266,7 @@
 .dropAvatar {
   width: 28px;
   height: 28px;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -521,7 +521,7 @@
 .reqAvatar {
   width: 36px;
   height: 36px;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -609,10 +609,10 @@
 /* REALTIME TOAST FLOATER */
 .toast {
   position: fixed;
-  top: 2rem;
+  top: 80px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--orange-gradient);
+  background: var(--primary);
   color: #fff;
   padding: 1rem 2rem;
   border-radius: 50px;
@@ -1007,7 +1007,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--orange-gradient);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;

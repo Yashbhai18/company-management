@@ -1,3 +1,5 @@
+/* ── Dashboard Layout — Zapier Design Language ────────────────────────────── */
+
 .layoutWrapper {
   display: flex;
   flex-direction: column;
@@ -10,27 +12,133 @@
   display: flex;
   flex: 1;
   width: 100%;
-  background-color: var(--bg-color);
-  color: var(--text-color);
+  background-color: var(--canvas);
+  color: var(--ink);
   overflow: hidden;
   position: relative;
-  margin-top: 60px; /* Clear fixed top header */
+  margin-top: 60px;
   height: calc(100vh - 60px);
 }
 
 .mainContent {
   flex: 1;
-  padding: 2rem 3rem;
-  overflow-y: auto;
-  margin-left: 260px; /* matches sidebar width */
   height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2rem;
   box-sizing: border-box;
+  background: var(--canvas);
+  color: var(--ink);
+  position: relative;
 }
 
 @media (max-width: 1024px) {
   .mainContent {
-    margin-left: 0;
     padding: 1.5rem;
   }
 }
 
+@media (max-width: 640px) {
+  .mainContent {
+    padding: 1rem;
+  }
+}
+
+/* ── Skeleton Loading ─────────────────────────────────────────────────────── */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  padding-bottom: 2rem;
+}
+
+.loadingHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: pulseShimmer 1.5s infinite ease-in-out;
+}
+
+.loadingTitle {
+  width: 250px;
+  height: 26px;
+  background-color: var(--canvas-soft);
+  border-radius: var(--radius-sm);
+}
+
+.loadingSubtitle {
+  width: 380px;
+  height: 15px;
+  background-color: var(--canvas-soft);
+  border-radius: var(--radius-sm);
+  opacity: 0.7;
+}
+
+.loadingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.loadingCard {
+  background: var(--canvas-soft);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: pulseShimmer 1.5s infinite ease-in-out;
+  animation-delay: 0.1s;
+}
+
+.loadingCardHeader {
+  width: 120px;
+  height: 18px;
+  background-color: var(--mute);
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+}
+
+.loadingCardBody {
+  width: 100%;
+  height: 56px;
+  background-color: var(--mute);
+  border-radius: var(--radius-sm);
+  opacity: 0.35;
+}
+
+.loadingTable {
+  border: 1px solid var(--border-color);
+  background: var(--canvas-soft);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  animation: pulseShimmer 1.5s infinite ease-in-out;
+  animation-delay: 0.2s;
+}
+
+.loadingTableHeader {
+  width: 100%;
+  height: 30px;
+  background-color: var(--mute);
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+}
+
+.loadingTableRow {
+  width: 100%;
+  height: 44px;
+  background-color: var(--mute);
+  border-radius: var(--radius-sm);
+  opacity: 0.25;
+}
+
+@keyframes pulseShimmer {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1; }
+}

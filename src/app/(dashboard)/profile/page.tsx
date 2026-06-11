@@ -219,7 +219,9 @@ export default function ProfilePage() {
         {/* Card 1: Core Profile Identity */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIconWrapper}>👤</div>
+            <div className={styles.cardIconWrapper}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+            </div>
             <div>
               <h2 className={styles.cardTitle}>Personal Identity</h2>
               <p className={styles.cardSub}>Your public details inside {org?.name}.</p>
@@ -328,7 +330,9 @@ export default function ProfilePage() {
         {/* Card 2: Contact Methods */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIconWrapper}>📞</div>
+            <div className={styles.cardIconWrapper}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-2.824-1.28-5.116-3.572-6.39-6.39l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
+            </div>
             <div>
               <h2 className={styles.cardTitle}>Communication</h2>
               <p className={styles.cardSub}>Your secured channels of contact.</p>
@@ -417,7 +421,9 @@ export default function ProfilePage() {
         {/* Card 3: Security & Access */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIconWrapper}>🔐</div>
+            <div className={styles.cardIconWrapper}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0V10.5m-2.25 10.5h13.5c1.125 0 2.25-1.125 2.25-2.25v-6.75c0-1.125-1.125-2.25-2.25-2.25H5.25c-1.125 0-2.25 1.125-2.25 2.25v6.75c0 1.125 1.125 2.25 2.25 2.25z" /></svg>
+            </div>
             <div>
               <h2 className={styles.cardTitle}>Security Ledger</h2>
               <p className={styles.cardSub}>Alter cryptographic authentication keys.</p>
@@ -504,7 +510,9 @@ export default function ProfilePage() {
         {isAdmin && (
           <div className={`${styles.card} ${styles.orgExpandCard}`}>
             <div className={styles.cardHeader}>
-              <div className={styles.cardIconWrapper}>🚀</div>
+              <div className={styles.cardIconWrapper}>
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}><path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.63 8.41a14.98 14.98 0 00-6.16 12.12c1.7-.34 3.4-.51 5.1-.51" /></svg>
+              </div>
               <div>
                 <h2 className={styles.cardTitle}>Venture Catalyst</h2>
                 <p className={styles.cardSub}>Launch an entirely parallel workspace environment.</p>

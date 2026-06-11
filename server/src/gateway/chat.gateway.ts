@@ -5,6 +5,22 @@ import { Message } from '../models/Message';
 import { Conversation } from '../models/Conversation';
 import { notificationService } from '../services/notification.service';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+
+function logDebug(message: string) {
+  try {
+    const logPath = path.join(__dirname, '../../../scratch/gateway-debug.log');
+    const dir = path.dirname(logPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+  } catch (err) {
+    console.error('Failed to write debug log:', err);
+  }
+}
 
 interface AuthSocket extends Socket {
   userId: string;
@@ -31,11 +47,99 @@ import { TimeEntry } from '../models/TimeEntry';
 let globalIO: SocketIOServer | null = null;
 const pendingClockOuts = new Map<string, NodeJS.Timeout>();
 
+/** 
+ * Tracks when the last session warning was sent per userId.
+ * Used to throttle warnings to once every 5 minutes.
+ */
+const lastWarningTimestamp = new Map<string, number>();
+
+/**
+ * Global interval: check all active shifts every 60 seconds.
+ * - Warn employees at 11h+ (every 5 min) that they will be auto-clocked out.
+ * - Auto clock-out at 12h exactly.
+ */
+function startSessionTimeoutWatcher(io: SocketIOServer) {
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  const ELEVEN_HOURS_MS = 11 * 60 * 60 * 1000;
+  const WARN_INTERVAL_MS = 5 * 60 * 1000; // warn every 5 minutes
+
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+
+      // Find all active (not clocked-out) shifts older than 11 hours
+      const longShifts = await TimeEntry.find({
+        clockOut: { $exists: false },
+        clockIn: { $lte: new Date(now - ELEVEN_HOURS_MS) },
+      }).lean();
+
+      for (const shift of longShifts) {
+        const shiftMs = now - new Date(shift.clockIn).getTime();
+        const userId = shift.userId.toString();
+        const minutesIn = Math.floor(shiftMs / 60000);
+        const hoursIn = (shiftMs / 3600000).toFixed(1);
+
+        if (shiftMs >= TWELVE_HOURS_MS) {
+          // ── AUTO CLOCK-OUT at 12 hours ──────────────────────────────────────
+          const entry = await TimeEntry.findById(shift._id);
+          if (!entry || entry.clockOut) continue; // already clocked out
+
+          const clockOutTime = new Date();
+          const durationMinutes = Math.floor((clockOutTime.getTime() - entry.clockIn.getTime()) / 60000);
+          entry.clockOut = clockOutTime;
+          entry.durationMinutes = durationMinutes;
+          await entry.save();
+
+          console.info(`[attendance] Auto-clocked-out user ${userId} after ${hoursIn}h (12h limit reached).`);
+
+          // Notify the employee client
+          io.to(`user:${userId}`).emit('attendance:auto_clocked_out', {
+            durationMinutes,
+            clockIn: entry.clockIn,
+            clockOut: clockOutTime,
+          });
+
+          // Broadcast updated status to org admins
+          const user = await (await import('../models/User')).User.findById(userId).select('orgId').lean();
+          if (user) {
+            io.to(`org:${(user as any).orgId}`).emit('attendance:status_changed');
+          }
+
+          // Clear any lingering warning timestamp
+          lastWarningTimestamp.delete(userId);
+
+        } else {
+          // ── WARN every 5 minutes once past 11h ──────────────────────────────
+          const lastWarn = lastWarningTimestamp.get(userId) || 0;
+          if (now - lastWarn >= WARN_INTERVAL_MS) {
+            const minutesRemaining = Math.ceil((TWELVE_HOURS_MS - shiftMs) / 60000);
+            
+            io.to(`user:${userId}`).emit('attendance:session_warning', {
+              minutesIn,
+              minutesRemaining,
+              clockIn: shift.clockIn,
+            });
+
+            lastWarningTimestamp.set(userId, now);
+            console.info(`[attendance] Session warning sent to user ${userId} — ${hoursIn}h clocked in, ${minutesRemaining}min remaining.`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[attendance] Session timeout watcher error:', err);
+    }
+  }, 60 * 1000); // run every 60 seconds
+}
+
 /** Decoupled getter to allow REST controllers to tap into WebSocket relays */
 export const getSocketIO = () => globalIO;
 
 export function initChatGateway(io: SocketIOServer) {
   globalIO = io;
+
+  // Start the session timeout watcher — checks every 60s for long shifts
+  startSessionTimeoutWatcher(io);
+
   // Auth middleware for every socket connection
   io.use(async (socket, next) => {
     try {
@@ -82,6 +186,14 @@ export function initChatGateway(io: SocketIOServer) {
 
       // NOTE: Automatic clock-in on connection removed per user request.
       // Employees must now manually clock in via the Dashboard.
+
+      // ─── Session alive acknowledgement ────────────────────────────────────
+      // When employee clicks "Yes, I'm here" on the session warning popup,
+      // reset their warning timer so the next warning fires 5 minutes later.
+      socket.on('attendance:session_alive', () => {
+        lastWarningTimestamp.set(socket.userId, Date.now());
+        console.info(`[attendance] User ${socket.userName} confirmed session alive.`);
+      });
     }
 
     // Helper to attach threadCount aggregate to a set of messages
@@ -158,10 +270,17 @@ export function initChatGateway(io: SocketIOServer) {
 
     // ─── React to Message ────────────────────────────────────────────────────
     socket.on('chat:react', async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
-      if (!messageId || !emoji) return;
+      logDebug(`chat:react received for messageId: ${messageId}, emoji: ${emoji}, userId: ${socket.userId}`);
+      if (!messageId || !emoji) {
+        logDebug(`chat:react skipped - missing messageId or emoji`);
+        return;
+      }
       try {
         const msg = await Message.findById(messageId);
-        if (!msg) return;
+        if (!msg) {
+          logDebug(`chat:react skipped - message not found in DB`);
+          return;
+        }
 
         if (!msg.reactions) msg.reactions = [];
 
@@ -193,7 +312,9 @@ export function initChatGateway(io: SocketIOServer) {
           }
         }
 
+        msg.markModified('reactions');
         await msg.save();
+        logDebug(`chat:react saved to DB. Reactions array: ${JSON.stringify(msg.reactions)}`);
 
         // Retrieve fully populated message object for UI propagation
         const updatedMsgObj = await Message.findById(messageId).populate('replyToId').lean();
@@ -202,30 +323,39 @@ export function initChatGateway(io: SocketIOServer) {
         // But simplest is to broad-broadcast update.
         if (msg.type === 'org_chat') {
           io.to(`org:${socket.orgId}`).emit('chat:message_updated', updatedMsgObj);
+          logDebug(`chat:react broadcast to org room: org:${socket.orgId}`);
         } else if (msg.conversationId) {
           const conv = await Conversation.findById(msg.conversationId).lean();
           if (conv) {
             for (const participantId of conv.participants) {
               io.to(`user:${participantId}`).emit('chat:message_updated', updatedMsgObj);
+              logDebug(`chat:react broadcast to user room: user:${participantId}`);
             }
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        logDebug(`chat:react error: ${err.message}`);
         console.error('[chat] react error', err);
       }
     });
 
     // ─── Send org chat message ───────────────────────────────────────────────
     socket.on('chat:send_org', async ({ content, parentId, replyToId, isForwarded }: { content: string; parentId?: string; replyToId?: string; isForwarded?: boolean }) => {
-      if (!content?.trim()) return;
+      console.log(`[chat:send_org] Received from ${socket.userName} (${socket.userId}): "${content?.slice(0, 50)}"`);
+      if (!content?.trim()) {
+        console.log('[chat:send_org] Skipped: empty content');
+        return;
+      }
       try {
         const { mentionAll, mentionedNames } = parseMentions(content);
+        console.log('[chat:send_org] Step 1: parsed mentions OK');
 
         // Resolve @mentioned usernames to user ids
         const mentionedUsers = mentionedNames.length
           ? await User.find({ orgId: socket.orgId, username: { $in: mentionedNames } }).select('_id username').lean()
           : [];
         const mentionIds = mentionedUsers.map((u) => u._id);
+        console.log('[chat:send_org] Step 2: resolved mentions OK');
 
         const message = await Message.create({
           orgId: socket.orgId,
@@ -241,11 +371,15 @@ export function initChatGateway(io: SocketIOServer) {
           replyToId: replyToId ? new mongoose.Types.ObjectId(replyToId) : undefined,
           isForwarded: !!isForwarded,
         });
+        console.log(`[chat:send_org] Step 3: message saved to DB with id ${message._id}`);
 
         const msgObj = await Message.findById(message._id).populate('replyToId').lean();
+        console.log('[chat:send_org] Step 4: message populated OK');
 
         // Broadcast to whole org
-        io.to(`org:${socket.orgId}`).emit('chat:org_message', msgObj);
+        const room = `org:${socket.orgId}`;
+        io.to(room).emit('chat:org_message', msgObj);
+        console.log(`[chat:send_org] Step 5: broadcast to room "${room}" OK`);
 
         // If this was a thread reply, notify the org to update the thread count on the parent row!
         if (parentId) {
@@ -253,59 +387,78 @@ export function initChatGateway(io: SocketIOServer) {
           io.to(`org:${socket.orgId}`).emit('chat:thread_count_updated', { parentId, threadCount: newCount });
         }
 
-        // Notify ALL other organization members + super admins of this new message!
-        const allOtherUsers = await User.find({ 
-          orgId: socket.orgId, 
-          _id: { $ne: socket.userId },
-          isActive: true 
-        }).select('_id').lean();
+        // Notify ALL other organization members of this new message
+        try {
+          const allOtherUsers = await User.find({ 
+            orgId: socket.orgId, 
+            _id: { $ne: socket.userId },
+          }).select('_id').lean();
 
-        for (const targetUser of allOtherUsers) {
-          const targetIdStr = targetUser._id.toString();
-          const isMentioned = mentionAll || mentionIds.some(mid => mid.toString() === targetIdStr);
-          
-          const titlePrefix = isMentioned ? '📢 Tagged in ' : '💬 New message in ';
-          
-          await notificationService.createNotification({
-            userId: targetIdStr,
-            orgId: socket.orgId,
-            type: 'chat_message',
-            title: `${titlePrefix}Org Chat by ${socket.userName}`,
-            message: content.trim().slice(0, 80),
-            actionUrl: '/chat?view=org',
-          });
+          console.log(`[chat:send_org] Step 6: found ${allOtherUsers.length} users to notify`);
 
-          io.to(`user:${targetIdStr}`).emit('notification:new');
+          for (const targetUser of allOtherUsers) {
+            const targetIdStr = targetUser._id.toString();
+            const isMentioned = mentionAll || mentionIds.some(mid => mid.toString() === targetIdStr);
+            
+            const titlePrefix = isMentioned ? '📢 Tagged in ' : '💬 New message in ';
+            
+            await notificationService.createNotification({
+              userId: targetIdStr,
+              orgId: socket.orgId,
+              type: 'chat_message',
+              title: `${titlePrefix}Org Chat by ${socket.userName}`,
+              message: content.trim().slice(0, 80),
+              actionUrl: '/chat?view=org',
+            });
+
+            io.to(`user:${targetIdStr}`).emit('notification:new');
+          }
+          console.log('[chat:send_org] Step 7: notifications sent OK');
+        } catch (notifErr) {
+          // Non-fatal: message was already broadcast, only notifications failed
+          console.error('[chat:send_org] Notification step failed (non-fatal):', notifErr);
         }
       } catch (err) {
         console.error('[chat] send org error', err);
+        // Emit error back to sender so they know it failed
+        socket.emit('chat:error', { event: 'send_org', error: (err as any)?.message || 'Unknown error' });
       }
     });
 
-    // ─── Send DM ─────────────────────────────────────────────────────────────
-    socket.on('chat:send_dm', async ({ recipientId, content, parentId, replyToId, isForwarded }: { recipientId: string; content: string; parentId?: string; replyToId?: string; isForwarded?: boolean }) => {
-      if (!content?.trim() || !recipientId) return;
+    // ─── Send DM / Group Message ─────────────────────────────────────────────
+    socket.on('chat:send_dm', async ({ recipientId, conversationId, content, parentId, replyToId, isForwarded }: { recipientId?: string; conversationId?: string; content: string; parentId?: string; replyToId?: string; isForwarded?: boolean }) => {
+      if (!content?.trim() || (!recipientId && !conversationId)) return;
       try {
-        // Find or create conversation
-        const participantsSorted = [socket.userId, recipientId].sort();
-        let conversation = await Conversation.findOne({
-          orgId: socket.orgId,
-          participants: { $all: participantsSorted, $size: 2 },
-        });
-        if (!conversation) {
-          conversation = await Conversation.create({
-            orgId: socket.orgId,
-            participants: participantsSorted,
-            lastMessage: isForwarded ? 'Forwarded message' : content.trim().slice(0, 100),
-            lastMessageAt: new Date(),
-            lastSenderId: socket.userId,
+        let conversation;
+        if (conversationId) {
+          conversation = await Conversation.findOne({
+            _id: conversationId,
+            participants: new mongoose.Types.ObjectId(socket.userId)
           });
-        } else {
-          conversation.lastMessage = isForwarded ? 'Forwarded message' : content.trim().slice(0, 100);
-          conversation.lastMessageAt = new Date();
-          conversation.lastSenderId = new mongoose.Types.ObjectId(socket.userId);
-          await conversation.save();
+        } else if (recipientId) {
+          const participantsSorted = [socket.userId, recipientId].sort();
+          conversation = await Conversation.findOne({
+            orgId: socket.orgId,
+            participants: { $all: participantsSorted, $size: 2 },
+          });
+          if (!conversation) {
+            conversation = await Conversation.create({
+              orgId: socket.orgId,
+              participants: participantsSorted,
+              lastMessage: isForwarded ? 'Forwarded message' : content.trim().slice(0, 100),
+              lastMessageAt: new Date(),
+              lastSenderId: socket.userId,
+            });
+          }
         }
+
+        if (!conversation) return;
+
+        // Update conversation lastMessage stats
+        conversation.lastMessage = isForwarded ? 'Forwarded message' : content.trim().slice(0, 100);
+        conversation.lastMessageAt = new Date();
+        conversation.lastSenderId = new mongoose.Types.ObjectId(socket.userId);
+        await conversation.save();
 
         const message = await Message.create({
           orgId: socket.orgId,
@@ -326,28 +479,33 @@ export function initChatGateway(io: SocketIOServer) {
         const msgObj = await Message.findById(message._id).populate('replyToId').lean();
         const convId = conversation._id.toString();
 
-        // Deliver to both participants
-        io.to(`user:${socket.userId}`).emit('chat:dm_message', { conversationId: convId, message: msgObj });
-        io.to(`user:${recipientId}`).emit('chat:dm_message', { conversationId: convId, message: msgObj });
+        // Deliver to all participants
+        for (const participantId of conversation.participants) {
+          io.to(`user:${participantId.toString()}`).emit('chat:dm_message', { conversationId: convId, message: msgObj });
+        }
 
         // Notify frontend if this updates thread count
         if (parentId) {
           const newCount = await Message.countDocuments({ parentId });
           const payload = { parentId, threadCount: newCount };
-          io.to(`user:${socket.userId}`).emit('chat:thread_count_updated', payload);
-          io.to(`user:${recipientId}`).emit('chat:thread_count_updated', payload);
+          for (const participantId of conversation.participants) {
+            io.to(`user:${participantId.toString()}`).emit('chat:thread_count_updated', payload);
+          }
         }
 
-        // Notify recipient
-        await notificationService.createNotification({
-          userId: recipientId,
-          orgId: socket.orgId,
-          type: 'chat_dm',
-          title: `New message from ${socket.userName}`,
-          message: content.trim().slice(0, 80),
-          actionUrl: `/chat?dm=${socket.userId}`,
-        });
-        io.to(`user:${recipientId}`).emit('notification:new');
+        // Notify other recipients
+        const otherParticipants = conversation.participants.filter(p => p.toString() !== socket.userId);
+        for (const participant of otherParticipants) {
+          await notificationService.createNotification({
+            userId: participant.toString(),
+            orgId: socket.orgId,
+            type: 'chat_dm',
+            title: conversation.isGroup ? `New message in ${conversation.name}` : `New message from ${socket.userName}`,
+            message: content.trim().slice(0, 80),
+            actionUrl: `/chat?dm=${convId}`,
+          });
+          io.to(`user:${participant.toString()}`).emit('notification:new');
+        }
       } catch (err) {
         console.error('[chat] send DM error', err);
       }
@@ -365,8 +523,82 @@ export function initChatGateway(io: SocketIOServer) {
       }
     });
 
+    // ─── Edit Message ────────────────────────────────────────────────────────
+    socket.on('chat:edit', async ({ messageId, content }: { messageId: string; content: string }) => {
+      logDebug(`chat:edit received for messageId: ${messageId}, content: ${content}, userId: ${socket.userId}`);
+      if (!messageId || !content?.trim()) {
+        logDebug(`chat:edit skipped - missing messageId or content`);
+        return;
+      }
+      try {
+        const msg = await Message.findById(messageId);
+        if (!msg) {
+          logDebug(`chat:edit skipped - message not found in DB`);
+          return;
+        }
+        if (msg.senderId.toString() !== socket.userId) {
+          logDebug(`chat:edit skipped - auth mismatch. msg.senderId: ${msg.senderId}, socket.userId: ${socket.userId}`);
+          return;
+        }
+
+        msg.content = content.trim();
+        msg.isEdited = true;
+        await msg.save();
+        logDebug(`chat:edit saved to DB successfully!`);
+
+        const updatedMsgObj = await Message.findById(messageId).populate('replyToId').lean();
+
+        if (msg.type === 'org_chat') {
+          io.to(`org:${socket.orgId}`).emit('chat:message_updated', updatedMsgObj);
+          logDebug(`chat:edit broadcast to org room: org:${socket.orgId}`);
+        } else if (msg.conversationId) {
+          const conv = await Conversation.findById(msg.conversationId).lean();
+          if (conv) {
+            for (const participantId of conv.participants) {
+              io.to(`user:${participantId}`).emit('chat:message_updated', updatedMsgObj);
+              logDebug(`chat:edit broadcast to user room: user:${participantId}`);
+            }
+          }
+        }
+      } catch (err: any) {
+        logDebug(`chat:edit error: ${err.message}`);
+        console.error('[chat] edit message error', err);
+      }
+    });
+
+    // ─── Delete Message ──────────────────────────────────────────────────────
+    socket.on('chat:delete', async ({ messageId }: { messageId: string }) => {
+      if (!messageId) return;
+      try {
+        const msg = await Message.findById(messageId);
+        if (!msg) return;
+        if (msg.senderId.toString() !== socket.userId) return;
+
+        await Message.deleteOne({ _id: messageId });
+
+        if (!msg.parentId) {
+          await Message.deleteMany({ parentId: messageId });
+        }
+
+        const payload = { messageId, parentId: msg.parentId };
+
+        if (msg.type === 'org_chat') {
+          io.to(`org:${socket.orgId}`).emit('chat:message_deleted', payload);
+        } else if (msg.conversationId) {
+          const conv = await Conversation.findById(msg.conversationId).lean();
+          if (conv) {
+            for (const participantId of conv.participants) {
+              io.to(`user:${participantId}`).emit('chat:message_deleted', payload);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[chat] delete message error', err);
+      }
+    });
+
     // ─── Typing Indicator ───────────────────────────────────────────────────
-    socket.on('chat:typing', ({ isTyping, targetView }: { isTyping: boolean; targetView: string }) => {
+    socket.on('chat:typing', async ({ isTyping, targetView }: { isTyping: boolean; targetView: string }) => {
       try {
         if (targetView === 'org') {
           socket.to(`org:${socket.orgId}`).emit('chat:typing_update', {
@@ -376,6 +608,23 @@ export function initChatGateway(io: SocketIOServer) {
             view: 'org'
           });
         } else {
+          const isConv = mongoose.Types.ObjectId.isValid(targetView);
+          if (isConv) {
+            const conv = await Conversation.findById(targetView).select('participants').lean();
+            if (conv) {
+              const otherParticipants = conv.participants.filter(p => p.toString() !== socket.userId);
+              for (const p of otherParticipants) {
+                io.to(`user:${p.toString()}`).emit('chat:typing_update', {
+                  userId: socket.userId,
+                  userName: socket.userName,
+                  isTyping,
+                  view: targetView
+                });
+              }
+              return;
+            }
+          }
+
           io.to(`user:${targetView}`).emit('chat:typing_update', {
             userId: socket.userId,
             userName: socket.userName,

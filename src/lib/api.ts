@@ -12,6 +12,7 @@ export const setAccessToken = (token: string | null) => {
       // Clear it
       document.cookie = `accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     }
+    window.dispatchEvent(new CustomEvent('accessTokenChanged', { detail: token }));
   }
 };
 

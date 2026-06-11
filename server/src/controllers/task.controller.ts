@@ -35,6 +35,7 @@ export const getTasks = async (req: Request, res: Response) => {
       .populate('assignedTo', '_id name username avatar')
       .populate('assignedBy', '_id name username')
       .populate('teamId', '_id name')
+      .populate('comments.userId', '_id name username avatar')
       .sort({ status: 1, createdAt: -1 }); // Pending first, then newest
 
     return res.json(tasks);
@@ -132,8 +133,6 @@ export const createTasks = async (req: Request, res: Response) => {
         message: `Task: "${title.slice(0, 50)}" assigned by ${adminName}.`,
         actionUrl: '/tasks',
       });
-
-      pushNotifSocket(assigneeId);
     }
 
     return res.status(201).json({ 
@@ -190,8 +189,6 @@ export const completeTask = async (req: Request, res: Response) => {
         message: `${completerName} marked "${taskObj.title.slice(0, 40)}" as Done.`,
         actionUrl: '/tasks',
       });
-
-      pushNotifSocket(adminIdStr);
     }
 
     return res.json({ message: 'Task successfully finalized.', task: taskObj });
@@ -225,63 +222,105 @@ export const updateTaskStage = async (req: Request, res: Response) => {
     }
 
     const oldStatus = taskObj.status;
-    taskObj.status = targetStage;
 
-    const isFinishing = targetStage.toLowerCase() === 'completed';
-    const wasFinished = oldStatus.toLowerCase() === 'completed';
-    const isRevision = targetStage.toLowerCase() === 'revision';
+    if (targetStage !== oldStatus) {
+      taskObj.status = targetStage;
 
-    if (isFinishing && !wasFinished) {
-      taskObj.completedAt = new Date();
-      
-      // Notify Administrative Team!
-      try {
-        const completer = await User.findById(userId).select('name').lean();
-        const completerName = completer?.name || 'An employee';
-        const admins = await User.find({ orgId, role: { $in: ['admin', 'super_admin'] }, isActive: true }).select('_id').lean();
-        
-        for (const admin of admins) {
-          const adminIdStr = admin._id.toString();
-          if (adminIdStr === userId) continue;
-          await notificationService.createNotification({
-            userId: adminIdStr,
-            orgId,
-            type: 'task_completed',
-            title: `✅ Task Completed`,
-            message: `${completerName} moved "${taskObj.title.slice(0, 40)}" to Completed.`,
-            actionUrl: '/tasks',
-          });
-          pushNotifSocket(adminIdStr);
-        }
-      } catch (notifyErr) {
-        console.error('Failed to send completion notification', notifyErr);
+      const isFinishing = targetStage.toLowerCase() === 'completed';
+      const wasFinished = oldStatus.toLowerCase() === 'completed';
+      const isRevision = targetStage.toLowerCase() === 'revision';
+
+      if (isFinishing && !wasFinished) {
+        taskObj.completedAt = new Date();
+      } else if (!isFinishing && wasFinished) {
+        taskObj.completedAt = undefined;
       }
-    } else if (!isFinishing && wasFinished) {
-      // Reset completedAt if pulled back from Completed column
-      taskObj.completedAt = undefined;
 
-      // DETECT REVISION REQUEST BY SUPER ADMIN / ADMIN
       if (isRevision && (role === 'admin' || role === 'super_admin')) {
         taskObj.revisionNotes = revisionNotes || 'No feedback specified.';
-
-        // Create employee notification
-        try {
-          await notificationService.createNotification({
-            userId: taskObj.assignedTo.toString(),
-            orgId,
-            type: 'task_revision',
-            title: `⚠️ Task Moved to Revision`,
-            message: `Super admin moved your task "${taskObj.title.slice(0, 35)}" back to Revision. Check comments.`,
-            actionUrl: '/tasks',
-          });
-          pushNotifSocket(taskObj.assignedTo.toString());
-        } catch (notifErr) {
-          console.error('Failed to notify assignee about revision', notifErr);
-        }
       }
+
+      await taskObj.save();
+
+      // Send notifications for stage changes
+      try {
+        const updater = await User.findById(userId).select('name').lean();
+        const updaterName = updater?.name || 'A user';
+        
+        const isMeAssignee = taskObj.assignedTo.toString() === userId;
+
+        if (isMeAssignee) {
+          // Assignee (employee) updated the task stage.
+          // Notify creator (assignedBy) and all admins/super admins.
+          const admins = await User.find({ 
+            orgId, 
+            role: { $in: ['admin', 'super_admin'] }, 
+            isActive: true 
+          }).select('_id').lean();
+          
+          const uniqueNotifyIds = new Set<string>();
+          if (taskObj.assignedBy) {
+            uniqueNotifyIds.add(taskObj.assignedBy.toString());
+          }
+          admins.forEach(admin => uniqueNotifyIds.add(admin._id.toString()));
+          uniqueNotifyIds.delete(userId); // Don't notify self
+
+          for (const notifyId of uniqueNotifyIds) {
+            let notificationType = 'task_stage_changed';
+            let title = `🔄 Task Stage Changed`;
+            let message = `Task "${taskObj.title.slice(0, 35)}" moved to "${targetStage}" by ${updaterName}.`;
+
+            if (isFinishing) {
+              notificationType = 'task_completed';
+              title = `✅ Task Completed`;
+              message = `${updaterName} moved "${taskObj.title.slice(0, 35)}" to Completed.`;
+            }
+
+            await notificationService.createNotification({
+              userId: notifyId,
+              orgId,
+              type: notificationType,
+              title,
+              message,
+              actionUrl: '/tasks',
+            });
+          }
+        } else {
+          // Admin or manager updated the task stage.
+          // Notify the assignee (assignedTo).
+          if (taskObj.assignedTo.toString() !== userId) {
+            let notificationType = 'task_stage_changed';
+            let title = `🔄 Task Stage Changed`;
+            let message = `Your task "${taskObj.title.slice(0, 35)}" was moved to "${targetStage}" by ${updaterName}.`;
+
+            if (isRevision) {
+              notificationType = 'task_revision';
+              title = `⚠️ Task Moved to Revision`;
+              message = `Task "${taskObj.title.slice(0, 35)}" was moved to Revision by ${updaterName}. Notes: ${revisionNotes || 'No feedback specified.'}`;
+            }
+
+            await notificationService.createNotification({
+              userId: taskObj.assignedTo.toString(),
+              orgId,
+              type: notificationType,
+              title,
+              message,
+              actionUrl: '/tasks',
+            });
+          }
+        }
+      } catch (notifyErr) {
+        console.error('Failed to send stage change notification:', notifyErr);
+      }
+    } else {
+      // Just save checklist or revision notes
+      const isRevision = targetStage.toLowerCase() === 'revision';
+      if (isRevision && (role === 'admin' || role === 'super_admin')) {
+        taskObj.revisionNotes = revisionNotes || 'No feedback specified.';
+      }
+      await taskObj.save();
     }
 
-    await taskObj.save();
     return res.json({ message: 'Task stage updated successfully.', task: taskObj });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
@@ -324,11 +363,34 @@ export const addKanbanStage = async (req: Request, res: Response) => {
   }
 };
 
+export const reorderKanbanStages = async (req: Request, res: Response) => {
+  try {
+    const { orgId } = (req as any).user as TokenPayload;
+    const { stages } = req.body;
+
+    if (!stages || !Array.isArray(stages) || stages.length === 0) {
+      return res.status(400).json({ message: 'Stages array is required.' });
+    }
+
+    const org = await Organization.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ message: 'Organization not found.' });
+    }
+
+    org.kanbanStages = stages.map(s => s.trim());
+    await org.save();
+
+    return res.json({ message: 'Stages reordered successfully.', stages: org.kanbanStages });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
 export const updateTask = async (req: Request, res: Response) => {
   try {
     const { orgId, userId, role } = (req as any).user as TokenPayload;
     const { id } = req.params;
-    const { checklist } = req.body;
+    const { title, description, assignedTo, startDate, dueDate, reminderAt, checklist, attachments } = req.body;
 
     const query: any = { _id: id, orgId };
     // Standard employee can only update their own assigned tasks
@@ -341,12 +403,31 @@ export const updateTask = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Task not found or access denied.' });
     }
 
+    const isAdmin = role === 'admin' || role === 'super_admin';
+
+    if (isAdmin) {
+      if (title !== undefined) taskObj.title = title;
+      if (description !== undefined) taskObj.description = description;
+      if (assignedTo !== undefined) taskObj.assignedTo = assignedTo;
+      if (startDate !== undefined) taskObj.startDate = startDate ? new Date(startDate) : undefined;
+      if (dueDate !== undefined) taskObj.dueDate = dueDate ? new Date(dueDate) : undefined;
+      if (reminderAt !== undefined) taskObj.reminderAt = reminderAt ? new Date(reminderAt) : undefined;
+      if (attachments !== undefined) taskObj.attachments = attachments;
+    }
+
     if (checklist !== undefined) {
       taskObj.checklist = checklist;
     }
 
     await taskObj.save();
-    return res.json({ message: 'Task updated successfully.', task: taskObj });
+
+    const populated = await Task.findById(taskObj._id)
+      .populate('assignedTo', '_id name username avatar')
+      .populate('assignedBy', '_id name username')
+      .populate('teamId', '_id name')
+      .populate('comments.userId', '_id name username avatar');
+
+    return res.json({ message: 'Task updated successfully.', task: populated });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }
@@ -386,6 +467,45 @@ export const deleteKanbanStage = async (req: Request, res: Response) => {
     await org.save();
 
     return res.json({ message: 'Stage deleted successfully.', stages: org.kanbanStages });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const addTaskComment = async (req: Request, res: Response) => {
+  try {
+    const { orgId, userId } = (req as any).user as TokenPayload;
+    const { id } = req.params;
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Comment text is required.' });
+    }
+
+    const taskObj = await Task.findOne({ _id: id, orgId });
+    if (!taskObj) {
+      return res.status(404).json({ message: 'Task not found.' });
+    }
+
+    if (!taskObj.comments) {
+      taskObj.comments = [];
+    }
+
+    taskObj.comments.push({
+      userId: userId as any,
+      text: text.trim(),
+      createdAt: new Date()
+    });
+
+    await taskObj.save();
+
+    const populated = await Task.findById(taskObj._id)
+      .populate('assignedTo', '_id name username avatar')
+      .populate('assignedBy', '_id name username')
+      .populate('teamId', '_id name')
+      .populate('comments.userId', '_id name username avatar');
+
+    return res.json({ message: 'Comment added successfully.', task: populated });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

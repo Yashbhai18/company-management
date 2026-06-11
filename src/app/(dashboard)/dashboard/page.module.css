@@ -269,7 +269,7 @@
 
 .chartBarFill {
   width: 20px;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 4px 4px 0 0;
   animation: growUp 0.6s ease;
 }
@@ -301,7 +301,7 @@
 }
 
 .stackedFillPrimary {
-  background: var(--orange-gradient);
+  background: var(--primary);
 }
 
 .stackedFillSecondary {
@@ -400,7 +400,7 @@
 
 .projectBarFill {
   height: 100%;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 4px;
 }
 
@@ -511,7 +511,7 @@
 .rosterAvatar {
   width: 36px;
   height: 36px;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -725,7 +725,7 @@
 .orgIcon {
   width: 44px;
   height: 44px;
-  background: var(--orange-gradient);
+  background: var(--primary);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -867,4 +867,342 @@
   border-radius: 10px;
   font-size: 0.85rem;
   margin-bottom: 1rem;
+}
+
+/* ── Employee-Oriented Dashboard Styles ────────────────────────────────── */
+.employeeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.greetingSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpiActiveShiftCard {
+  border-color: #16a34a !important;
+  background: linear-gradient(135deg, #ffffff, rgba(22, 163, 74, 0.03)) !important;
+  box-shadow: 0 4px 15px rgba(22, 163, 74, 0.08) !important;
+}
+
+.pulseDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: #16a34a;
+  border-radius: 50%;
+  margin-left: 0.75rem;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+  animation: pulseGreen 1.8s infinite;
+}
+
+@keyframes pulseGreen {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(22, 163, 74, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+.kpiSubtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 0.25rem;
+}
+
+.cardHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.cardHeaderRow .cardSectionTitle {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.viewAllLink {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+}
+
+.viewAllLink:hover {
+  color: var(--primary-hover);
+  transform: translateX(3px);
+}
+
+.taskListContainer, .shiftsListContainer, .leavesListContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.emptyContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2.5rem 1rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: #f8fafc;
+  height: 100%;
+}
+
+.emptyText {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.dashboardTaskList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dashboardTaskItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.dashboardTaskItem:hover {
+  background: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.taskInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.taskTitleText {
+  font-weight: 600;
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.taskDescText {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.taskDueText {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.overdueText {
+  color: #ef4444;
+}
+
+.taskBadge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status_pending {
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+.status_in_progress {
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.status_revision {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.status_completed, .status_done {
+  background: rgba(22, 163, 74, 0.08);
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+}
+
+.dashboardShiftsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dashboardShiftRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.shiftMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.shiftDate {
+  font-weight: 700;
+  color: var(--text-color);
+  font-size: 0.88rem;
+}
+
+.shiftHours {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.shiftDetails {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.locationTag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tagOnSite {
+  background: rgba(234, 88, 12, 0.08);
+  color: var(--primary);
+}
+
+.tagWfh {
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+}
+
+.shiftDuration {
+  font-weight: 700;
+  color: var(--text-color);
+  font-size: 0.85rem;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+
+.dashboardLeavesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .dashboardLeavesGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboardLeaveCard {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.dashboardLeaveCard:hover {
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.leaveHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.leaveType {
+  font-weight: 700;
+  color: var(--text-color);
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.statusBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.statusBadge.status_pending {
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.statusBadge.status_approved {
+  background: rgba(22, 163, 74, 0.08);
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+}
+
+.statusBadge.status_rejected {
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.leaveDates {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.leaveReason {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.3;
 }

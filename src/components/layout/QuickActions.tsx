@@ -11,10 +11,19 @@ export default function QuickActions() {
   
   // Create Organization Modal
   const [showOrgModal, setShowOrgModal] = React.useState(false);
+  const [isClosingOrg, setIsClosingOrg] = React.useState(false);
   const [newOrgName, setNewOrgName] = React.useState('');
   const [newSlug, setNewSlug] = React.useState('');
   const [isCreating, setIsCreating] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState('');
+
+  const closeOrgModal = () => {
+    setIsClosingOrg(true);
+    setTimeout(() => {
+      setShowOrgModal(false);
+      setIsClosingOrg(false);
+    }, 250);
+  };
 
   // Fetch identity context
   const fetchContext = React.useCallback(async () => {
@@ -26,12 +35,22 @@ export default function QuickActions() {
       setUser(uRes.data.user);
       setOrg(uRes.data.org);
       setMyOrgs(oRes.data.orgs || []);
+      localStorage.setItem('attendance:user', JSON.stringify(uRes.data.user));
+      localStorage.setItem('attendance:org', JSON.stringify(uRes.data.org));
     } catch (err) {
       console.error('QuickActions load failed:', err);
     }
   }, []);
 
   React.useEffect(() => {
+    // Load from cache synchronously on client mount to prevent SSR hydration mismatch
+    try {
+      const cachedUser = localStorage.getItem('attendance:user');
+      const cachedOrg = localStorage.getItem('attendance:org');
+      if (cachedUser) setUser(JSON.parse(cachedUser));
+      if (cachedOrg) setOrg(JSON.parse(cachedOrg));
+    } catch {}
+
     fetchContext();
   }, [fetchContext]);
 
@@ -74,11 +93,15 @@ export default function QuickActions() {
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('attendance:user');
+      localStorage.removeItem('attendance:org');
       await api.post('/auth/logout');
       const apiModule = await import('../../lib/api');
       apiModule.setAccessToken(null);
       window.location.href = '/';
     } catch (err) {
+      localStorage.removeItem('attendance:user');
+      localStorage.removeItem('attendance:org');
       window.location.href = '/';
     }
   };
@@ -151,8 +174,8 @@ export default function QuickActions() {
 
       {/* MODAL: CREATE ORGANIZATION WITHIN SHARED CONTEXT */}
       {showOrgModal && (
-        <div className={styles.modalBackdrop}>
-          <div className={styles.modalContent}>
+        <div className={`${styles.modalBackdrop} ${isClosingOrg ? 'closingBackdrop' : ''}`} onClick={closeOrgModal}>
+          <div className={`${styles.modalContent} ${isClosingOrg ? 'closingContent' : ''}`} onClick={(e) => e.stopPropagation()}>
             <h2>Expand Your Network</h2>
             <p className={styles.modalDesc}>Build an independent new corporate architecture.</p>
 
@@ -182,7 +205,7 @@ export default function QuickActions() {
                 <button 
                   type="button" 
                   className={styles.cancelBtn} 
-                  onClick={() => setShowOrgModal(false)}
+                  onClick={closeOrgModal}
                 >
                   Cancel
                 </button>

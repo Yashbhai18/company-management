@@ -8,7 +8,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className={styles.layoutWrapper}>
       <Header />
       <div className={styles.layoutContainer}>
-        <Sidebar />
+        <React.Suspense fallback={<div style={{ width: '260px' }} />}>
+          <Sidebar />
+        </React.Suspense>
         <main className={styles.mainContent}>
           {children}
         </main>

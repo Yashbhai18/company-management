@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const PUBLIC_ROUTES = ['/login', '/register', '/invite', '/register-employee'];
-const ADMIN_ROUTES = ['/people', '/reports', '/invoices', '/organization', '/security'];
+const ADMIN_ROUTES = ['/reports', '/invoices', '/organization', '/security'];
 
 export function middleware(req: NextRequest) {
   const token = req.cookies.get('accessToken')?.value;

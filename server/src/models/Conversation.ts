@@ -3,6 +3,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IConversation extends Document {
   orgId: mongoose.Types.ObjectId;
   participants: mongoose.Types.ObjectId[]; // exactly 2 for DMs
+  isGroup?: boolean;
+  name?: string;
   lastMessage: string;
   lastMessageAt: Date;
   lastSenderId: mongoose.Types.ObjectId;
@@ -14,6 +16,8 @@ const ConversationSchema = new Schema<IConversation>(
   {
     orgId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
     participants: [{ type: Schema.Types.ObjectId, ref: 'User', required: true }],
+    isGroup: { type: Boolean, default: false },
+    name: { type: String, default: '' },
     lastMessage: { type: String, default: '' },
     lastMessageAt: { type: Date, default: Date.now },
     lastSenderId: { type: Schema.Types.ObjectId, ref: 'User' },

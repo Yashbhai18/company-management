@@ -11,6 +11,7 @@ import chatRoutes from './routes/chat.routes';
 import teamRoutes from './routes/team.routes';
 import taskRoutes from './routes/task.routes';
 import organizationRoutes from './routes/organization.routes';
+import searchRoutes from './routes/search.routes';
 import { CLIENT_URL, NODE_ENV } from './config/env';
 
 /** Create and configure express app */
@@ -36,6 +37,7 @@ export const createApp = () => {
   app.use('/api/teams', teamRoutes);
   app.use('/api/tasks', taskRoutes);
   app.use('/api/organization', organizationRoutes);
+  app.use('/api/search', searchRoutes);
 
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error(err);

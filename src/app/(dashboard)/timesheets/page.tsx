@@ -41,6 +41,15 @@ export default function TimesheetsPage() {
   // Calendar and View Switcher States
   const [viewMode, setViewMode] = React.useState<'list' | 'calendar'>('list');
   const [selectedDayForModal, setSelectedDayForModal] = React.useState<Date | null>(null);
+  const [isClosingModal, setIsClosingModal] = React.useState(false);
+
+  const closeModalWithAnim = () => {
+    setIsClosingModal(true);
+    setTimeout(() => {
+      setSelectedDayForModal(null);
+      setIsClosingModal(false);
+    }, 250);
+  };
   
   // Custom Date Picker States
   const [customStartOpen, setCustomStartOpen] = React.useState(false);
@@ -393,11 +402,6 @@ export default function TimesheetsPage() {
             {currentUser?.role === 'employee' ? 'Review your recent activity logs.' : 'Review global organization shift reports.'}
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <QuickActions />
-          <NotificationDrawer />
-          <ClockInOutButton />
-        </div>
       </header>
 
       <div className={styles.filterBar}>
@@ -540,7 +544,8 @@ export default function TimesheetsPage() {
                 className={`${styles.toggleBtn} ${viewMode === 'list' ? styles.toggleActive : ''}`}
                 onClick={() => setViewMode('list')}
               >
-                📋 List
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                List
               </button>
               <button 
                 type="button"
@@ -555,7 +560,8 @@ export default function TimesheetsPage() {
                   }
                 }}
               >
-                📅 Calendar
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '16px', height: '16px', display: 'inline-block', marginRight: '6px', verticalAlign: 'text-bottom' }}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                Calendar
               </button>
             </div>
           </div>
@@ -724,13 +730,13 @@ export default function TimesheetsPage() {
 
       {/* Day Details Modal */}
       {selectedDayForModal && (
-        <div className={styles.modalOverlay} onClick={() => setSelectedDayForModal(null)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+        <div className={`${styles.modalOverlay} ${isClosingModal ? 'closingOverlay' : ''}`} onClick={closeModalWithAnim}>
+          <div className={`${styles.modalContent} ${isClosingModal ? 'closingContent' : ''}`} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3 className={styles.modalTitle}>
                 Logs for {selectedDayForModal.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </h3>
-              <button type="button" className={styles.modalCloseBtn} onClick={() => setSelectedDayForModal(null)}>×</button>
+              <button type="button" className={styles.modalCloseBtn} onClick={closeModalWithAnim}>×</button>
             </div>
             
             <div className={styles.modalBody}>

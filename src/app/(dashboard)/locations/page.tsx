@@ -15,7 +15,17 @@ export default function LocationsPage() {
   const [locations, setLocations] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isClosing, setIsClosing] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+
+  const closeModalWithAnim = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsModalOpen(false);
+      resetForm();
+      setIsClosing(false);
+    }, 250);
+  };
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = React.useState(false);
 
@@ -131,8 +141,7 @@ export default function LocationsPage() {
         await api.post('/organization/locations', payload);
       }
       
-      setIsModalOpen(false);
-      resetForm();
+      closeModalWithAnim();
       fetchLocations();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to save location');
@@ -305,11 +314,11 @@ export default function LocationsPage() {
       </div>
 
       {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <form className={styles.modal} onSubmit={handleSave}>
+        <div className={`${styles.modalOverlay} ${isClosing ? 'closingOverlay' : ''}`} onClick={closeModalWithAnim}>
+          <form className={`${styles.modal} ${isClosing ? 'closingModal' : ''}`} onSubmit={handleSave} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>{editingId ? 'Edit Location' : 'Add New Location'}</h2>
-              <button type="button" className={styles.closeBtn} onClick={() => { setIsModalOpen(false); resetForm(); }}>&times;</button>
+              <button type="button" className={styles.closeBtn} onClick={closeModalWithAnim}>&times;</button>
             </div>
             
             <div className={styles.modalBody}>
@@ -397,7 +406,7 @@ export default function LocationsPage() {
             </div>
 
             <div className={styles.modalFooter}>
-              <button type="button" className={styles.cancelBtn} onClick={() => { setIsModalOpen(false); resetForm(); }}>Cancel</button>
+              <button type="button" className={styles.cancelBtn} onClick={closeModalWithAnim}>Cancel</button>
               <button type="submit" className={styles.saveBtn} disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingId ? 'Update Location' : 'Save Location'}
               </button>

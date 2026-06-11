@@ -1,5 +1,6 @@
 "use client";
 import React from 'react';
+import Link from 'next/link';
 import api from '../../../lib/api';
 import styles from './page.module.css';
 
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const [myRequests, setMyRequests] = React.useState<any[]>([]);
   const [tasks, setTasks] = React.useState<any[]>([]);
   const [leaveData, setLeaveData] = React.useState<any>(null);
+  const [recentShifts, setRecentShifts] = React.useState<any[]>([]);
 
   // Localized Stopwatch State enabling ticking timers for active shifts
   const [tickerTime, setTickerTime] = React.useState(new Date());
@@ -47,13 +49,15 @@ export default function DashboardPage() {
       setMyOrgs(oResp.data.orgs || []);
       setMyRequests(reqResp.data.requests || []);
 
-      // Fetch tasks and leave requests in parallel
-      const [tResp, lResp] = await Promise.all([
+      // Fetch tasks, leave requests, and timesheet history in parallel
+      const [tResp, lResp, histResp] = await Promise.all([
         api.get('/tasks').catch(() => ({ data: [] })),
-        api.get(currentUser.role === 'employee' ? '/time-off/my-requests' : '/time-off/all-requests').catch(() => ({ data: { requests: [], pendingCount: 0 } }))
+        api.get(currentUser.role === 'employee' ? '/time-off/my-requests' : '/time-off/all-requests').catch(() => ({ data: { requests: [], pendingCount: 0 } })),
+        api.get('/timesheets').catch(() => ({ data: { entries: [] } }))
       ]);
       setTasks(tResp.data || []);
       setLeaveData(lResp.data || null);
+      setRecentShifts(histResp.data?.entries || []);
     } catch (err) {
       console.error('Dashboard sync error:', err);
     } finally {
@@ -81,12 +85,248 @@ export default function DashboardPage() {
     return () => window.removeEventListener('global-shift-status-changed', onStatusChange);
   }, [fetchData]);
 
+  const getActiveDurationString = () => {
+    if (!activeShift) return '00:00:00';
+    const start = new Date(activeShift.clockIn);
+    const diff = tickerTime.getTime() - start.getTime();
+    if (diff < 0) return '00:00:00';
+    const hrs = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getWeeklyHours = () => {
+    const startOfWeek = new Date();
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const thisWeeksEntries = recentShifts.filter((entry: any) => {
+      return new Date(entry.clockIn) >= startOfWeek;
+    });
+
+    let totalMinutes = thisWeeksEntries.reduce((sum: number, entry: any) => {
+      if (entry.durationMinutes) {
+        return sum + entry.durationMinutes;
+      }
+      if (!entry.clockOut) {
+        const elapsed = Math.floor((tickerTime.getTime() - new Date(entry.clockIn).getTime()) / 60000);
+        return sum + Math.max(0, elapsed);
+      }
+      return sum;
+    }, 0);
+
+    const hrs = Math.floor(totalMinutes / 60);
+    const mins = Math.round(totalMinutes % 60);
+    return `${hrs}h ${mins}m`;
+  };
+
+  const renderEmployeeDashboard = () => {
+    const activeTasks = tasks.filter((t: any) => t.status !== 'completed' && t.status !== 'done');
+    
+    const completedMinsToday = stats?.personalMinsToday || 0;
+    const activeMins = activeShift ? Math.floor((tickerTime.getTime() - new Date(activeShift.clockIn).getTime()) / 60000) : 0;
+    const totalMinsToday = completedMinsToday + activeMins;
+    const todayHrs = Math.floor(totalMinsToday / 60);
+    const todayMins = Math.floor(totalMinsToday % 60);
+
+    const shiftStatusText = activeShift ? 'Clocked In' : 'Clocked Out';
+    const weeklyHoursStr = getWeeklyHours();
+
+    return (
+      <div className={styles.pageContainer}>
+        {/* Welcome Header */}
+        <div className={styles.employeeHeader}>
+          <div>
+            <span className={styles.eyebrow}>Personal Workspace</span>
+            <h1 className={styles.title}>Welcome back, {user?.name || 'Employee'}</h1>
+          </div>
+          <div className={styles.dateText}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        </div>
+
+        {/* Personal KPI Row */}
+        <div className={styles.kpiGrid}>
+          <div className={`${styles.kpiCard} ${activeShift ? styles.kpiActiveShiftCard : ''}`}>
+            <span className={styles.kpiLabel}>Shift Status</span>
+            <span className={styles.kpiValue}>
+              {shiftStatusText}
+              {activeShift && <span className={styles.pulseDot}></span>}
+            </span>
+            {activeShift ? (
+              <span className={styles.kpiSubtext}>
+                Started at {new Date(activeShift.clockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            ) : (
+              <span className={styles.kpiSubtext}>Ready to clock in</span>
+            )}
+          </div>
+          
+          <div className={styles.kpiCard}>
+            <span className={styles.kpiLabel}>Today's Timecard</span>
+            <span className={styles.kpiValue}>
+              {activeShift ? getActiveDurationString() : `${todayHrs}h ${todayMins}m`}
+            </span>
+            <span className={styles.kpiSubtext}>Active session duration</span>
+          </div>
+
+          <div className={styles.kpiCard}>
+            <span className={styles.kpiLabel}>This Week's Hours</span>
+            <span className={styles.kpiValue}>{weeklyHoursStr}</span>
+            <span className={styles.kpiSubtext}>Weekly cumulative</span>
+          </div>
+
+          <div className={styles.kpiCard}>
+            <span className={styles.kpiLabel}>My Open Tasks</span>
+            <span className={styles.kpiValue}>{activeTasks.length}</span>
+            <span className={styles.kpiSubtext}>Awaiting completion</span>
+          </div>
+        </div>
+
+        {/* Row 2: Personal Tasks vs Recent Shifts */}
+        <div className={styles.analyticsGrid}>
+          
+          {/* My Tasks Section */}
+          <div className={styles.analyticsCard}>
+            <div className={styles.cardHeaderRow}>
+              <h3 className={styles.cardSectionTitle}>My Active Assignments</h3>
+              <Link href="/tasks" className={styles.viewAllLink}>View All Tasks →</Link>
+            </div>
+            
+            <div className={styles.taskListContainer}>
+              {activeTasks.length === 0 ? (
+                <div className={styles.emptyContainer}>
+                  <p className={styles.emptyText}>You're all caught up! No active tasks assigned.</p>
+                </div>
+              ) : (
+                <div className={styles.dashboardTaskList}>
+                  {activeTasks.slice(0, 5).map((task: any) => {
+                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
+                    return (
+                      <div key={task._id} className={styles.dashboardTaskItem}>
+                        <div className={styles.taskInfo}>
+                          <span className={styles.taskTitleText}>{task.title}</span>
+                          <span className={styles.taskDescText}>{task.description || 'No description provided.'}</span>
+                          {task.dueDate && (
+                            <span className={`${styles.taskDueText} ${isOverdue ? styles.overdueText : ''}`}>
+                              Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {isOverdue && '(Overdue)'}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`${styles.taskBadge} ${styles['status_' + task.status]}`}>
+                          {task.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Shifts Section */}
+          <div className={styles.analyticsCard}>
+            <div className={styles.cardHeaderRow}>
+              <h3 className={styles.cardSectionTitle}>Recent Timecard Logs</h3>
+              <Link href="/timesheets" className={styles.viewAllLink}>Full Timesheet →</Link>
+            </div>
+            
+            <div className={styles.shiftsListContainer}>
+              {recentShifts.length === 0 ? (
+                <div className={styles.emptyContainer}>
+                  <p className={styles.emptyText}>No shifts logged in this period.</p>
+                </div>
+              ) : (
+                <div className={styles.dashboardShiftsList}>
+                  {recentShifts.slice(0, 5).map((entry: any) => {
+                    const dateStr = new Date(entry.clockIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    const clockInStr = new Date(entry.clockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const clockOutStr = entry.clockOut 
+                      ? new Date(entry.clockOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                      : 'Active Now';
+                    
+                    const durationStr = entry.durationMinutes !== undefined 
+                      ? `${Math.floor(entry.durationMinutes / 60)}h ${entry.durationMinutes % 60}m`
+                      : 'Ticking...';
+
+                    return (
+                      <div key={entry._id} className={styles.dashboardShiftRow}>
+                        <div className={styles.shiftMeta}>
+                          <span className={styles.shiftDate}>{dateStr}</span>
+                          <span className={styles.shiftHours}>{clockInStr} – {clockOutStr}</span>
+                        </div>
+                        <div className={styles.shiftDetails}>
+                          <span className={`${styles.locationTag} ${entry.locationStatus === 'on-site' ? styles.tagOnSite : styles.tagWfh}`}>
+                            {entry.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
+                          </span>
+                          <span className={styles.shiftDuration}>{durationStr}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Row 3: My Leave Requests */}
+        <div className={styles.projectMatrixCard}>
+          <div className={styles.cardHeaderRow}>
+            <h3 className={styles.cardSectionTitle}>My Leave Requests</h3>
+            <Link href="/time-off" className={styles.viewAllLink}>Request Time Off →</Link>
+          </div>
+          
+          <div className={styles.leavesListContainer}>
+            {(!leaveData?.requests || leaveData.requests.length === 0) ? (
+              <div className={styles.emptyContainer}>
+                <p className={styles.emptyText}>No leave requests recorded yet.</p>
+              </div>
+            ) : (
+              <div className={styles.dashboardLeavesGrid}>
+                {leaveData.requests.slice(0, 3).map((req: any) => {
+                  const startDateStr = new Date(req.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const endDateStr = new Date(req.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  
+                  return (
+                    <div key={req._id} className={styles.dashboardLeaveCard}>
+                      <div className={styles.leaveHeader}>
+                        <span className={styles.leaveType}>{req.type.replace('_', ' ')}</span>
+                        <span className={`${styles.statusBadge} ${styles['status_' + req.status]}`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      <div className={styles.leaveDates}>
+                        {startDateStr} – {endDateStr}
+                      </div>
+                      {req.reason && <div className={styles.leaveReason}>"{req.reason}"</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className={styles.loaderContainer}>
         <div className={styles.loader}></div>
       </div>
     );
+  }
+
+  // Branch here: If role is employee, render the new personalized view!
+  if (user?.role === 'employee') {
+    return renderEmployeeDashboard();
   }
 
   // Determine KPI metrics dynamically with fallback to user mockup
@@ -118,39 +358,58 @@ export default function DashboardPage() {
   // Compile recent activities dynamically
   const activities: any[] = [];
   
-  if (stats?.roster && stats.roster.length > 0) {
-    stats.roster.filter((m: any) => m.status === 'clocked_in').slice(0, 3).forEach((m: any) => {
+  // 1. Clock-in and clock-out events from recent shifts
+  recentShifts.forEach((entry: any) => {
+    const userName = entry.userId?.name || 'Employee';
+    if (entry.clockIn) {
+      const clockInDate = new Date(entry.clockIn);
       activities.push({
-        time: '09:12 AM',
-        user: m.name,
-        action: `clocked in (${m.locationStatus === 'on-site' ? 'On-site' : 'WFH'})`
+        rawTime: clockInDate,
+        time: clockInDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        user: userName,
+        action: `clocked in (${entry.locationStatus === 'on-site' ? 'On-site' : 'WFH'})`
       });
-    });
-  }
+    }
+    if (entry.clockOut) {
+      const clockOutDate = new Date(entry.clockOut);
+      activities.push({
+        rawTime: clockOutDate,
+        time: clockOutDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        user: userName,
+        action: `clocked out`
+      });
+    }
+  });
 
+  // 2. Completed tasks
   const completedTasks = tasks.filter((t: any) => t.status === 'completed' || t.status === 'done');
-  completedTasks.slice(0, 3).forEach((t: any) => {
-    const timeStr = t.completedAt 
-      ? new Date(t.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
-      : '09:30 AM';
+  completedTasks.forEach((t: any) => {
+    const taskDate = t.completedAt ? new Date(t.completedAt) : (t.updatedAt ? new Date(t.updatedAt) : new Date());
     activities.push({
-      time: timeStr,
+      rawTime: taskDate,
+      time: taskDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       user: t.assignedTo?.name || 'Employee',
       action: `completed task "${t.title}"`
     });
   });
 
-  // Fallback to exactly matches mockup if database contains no records
-  if (activities.length === 0) {
-    activities.push(
-      { time: '09:12 AM', user: 'Jane Doe', action: 'clocked in' },
-      { time: '09:30 AM', user: 'Jane Doe', action: 'task "Fix DB" completed' },
-      { time: '10:45 AM', user: 'Alex Jones', action: 'requested leave' }
-    );
+  // 3. Leave requests
+  if (leaveData?.requests && Array.isArray(leaveData.requests)) {
+    leaveData.requests.forEach((req: any) => {
+      if (req.createdAt) {
+        const reqDate = new Date(req.createdAt);
+        activities.push({
+          rawTime: reqDate,
+          time: reqDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          user: req.userId?.name || 'Employee',
+          action: `requested leave (${req.status})`
+        });
+      }
+    });
   }
 
-  // Sort activities loosely by time representation (mock format)
-  activities.sort((a, b) => a.time.localeCompare(b.time));
+  // Sort activities chronologically (descending: newest first)
+  activities.sort((a, b) => b.rawTime.getTime() - a.rawTime.getTime());
 
   return (
     <div className={styles.pageContainer}>
@@ -240,14 +499,20 @@ export default function DashboardPage() {
         <div className={styles.analyticsCard}>
           <h3 className={styles.cardSectionTitle}>Recent Activity Timeline</h3>
           <div className={styles.timeline}>
-            {activities.map((act, index) => (
-              <div key={index} className={styles.timelineItem}>
-                <span className={styles.timelineTime}>{act.time}</span>
-                <span className={styles.timelineDesc}>
-                  <strong>{act.user}</strong> {act.action}
-                </span>
+            {activities.length === 0 ? (
+              <div className={styles.emptyContainer}>
+                <p className={styles.emptyText}>No recent activity logged.</p>
               </div>
-            ))}
+            ) : (
+              activities.slice(0, 10).map((act, index) => (
+                <div key={index} className={styles.timelineItem}>
+                  <span className={styles.timelineTime}>{act.time}</span>
+                  <span className={styles.timelineDesc}>
+                    <strong>{act.user}</strong> {act.action}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

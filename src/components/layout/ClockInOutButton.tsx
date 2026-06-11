@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import styles from './clockbutton.module.css';
 import { useDialog } from '../ui/DialogProvider';
 import { useSocket } from '../../hooks/useSocket';
+import { SessionTimeoutModal } from './SessionTimeoutModal';
 
 export default function ClockInOutButton() {
   const { alert, confirm } = useDialog();
@@ -12,6 +13,15 @@ export default function ClockInOutButton() {
   const [activeShift, setActiveShift] = React.useState<any>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
   const isProcessingRef = React.useRef(false);
+
+  // Session timeout warning state
+  const [sessionWarning, setSessionWarning] = React.useState<{
+    minutesIn: number;
+    minutesRemaining: number;
+    clockIn: string;
+  } | null>(null);
+  // Toast for auto-clock-out notification
+  const [autoClockOutToast, setAutoClockOutToast] = React.useState<string | null>(null);
 
   // Localized precise stopwatch ticking state
   const [tickerTime, setTickerTime] = React.useState(new Date());
@@ -46,18 +56,41 @@ export default function ClockInOutButton() {
     fetchShiftStatus();
   }, [fetchShiftStatus]);
 
-  // Instantly react to backend-issued global auto-clock events
+  // Session warning & auto-clock-out socket listeners
   React.useEffect(() => {
     if (!socket) return;
-    
+
     const handleGlobalUpdate = () => {
       console.info('[attendance] Real-time sync triggered via socket event.');
       fetchShiftStatus();
     };
 
+    const handleSessionWarning = (payload: { minutesIn: number; minutesRemaining: number; clockIn: string }) => {
+      console.info('[attendance] Session warning received:', payload);
+      setSessionWarning(payload);
+    };
+
+    const handleAutoClockOut = (payload: { durationMinutes: number; clockIn: string; clockOut: string }) => {
+      console.info('[attendance] Auto clock-out received:', payload);
+      setSessionWarning(null);
+      setActiveShift(null);
+      const hours = Math.floor(payload.durationMinutes / 60);
+      const mins = payload.durationMinutes % 60;
+      setAutoClockOutToast(`You were automatically clocked out after ${hours}h ${mins}m.`);
+      // Auto-dismiss toast after 8s
+      setTimeout(() => setAutoClockOutToast(null), 8000);
+      // Sync global state
+      fetchShiftStatus();
+      window.dispatchEvent(new Event('global-shift-status-changed'));
+    };
+
     socket.on('attendance:status_changed', handleGlobalUpdate);
+    socket.on('attendance:session_warning', handleSessionWarning);
+    socket.on('attendance:auto_clocked_out', handleAutoClockOut);
     return () => {
       socket.off('attendance:status_changed', handleGlobalUpdate);
+      socket.off('attendance:session_warning', handleSessionWarning);
+      socket.off('attendance:auto_clocked_out', handleAutoClockOut);
     };
   }, [socket, fetchShiftStatus]);
 
@@ -150,6 +183,29 @@ export default function ClockInOutButton() {
     }
   };
 
+  // ─── Session warning handlers ──────────────────────────────────────────
+  const handleSessionAlive = React.useCallback(() => {
+    if (socket) socket.emit('attendance:session_alive');
+    setSessionWarning(null);
+  }, [socket]);
+
+  const handleSessionClockOut = React.useCallback(async () => {
+    setSessionWarning(null);
+    try {
+      setIsProcessing(true);
+      isProcessingRef.current = true;
+      await api.post('/timesheets/out');
+      setActiveShift(null);
+      await fetchShiftStatus();
+      window.dispatchEvent(new Event('global-shift-status-changed'));
+    } catch (err: any) {
+      await alert(err.response?.data?.message || 'Failed to clock out.', 'Error');
+    } finally {
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+    }
+  }, [socket, fetchShiftStatus, alert]);
+
   // Restrict rendering strictly to personnel level employees
   if (!user || user.role !== 'employee') return null;
 
@@ -186,18 +242,63 @@ export default function ClockInOutButton() {
   };
 
   return (
-    <div className={styles.wrapper}>
-      {renderStopwatch()}
-      <button
-        onClick={toggleShift}
-        disabled={isProcessing}
-        className={activeShift ? styles.clockOutBtn : styles.clockBtn}
-      >
-        <svg className={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {isProcessing ? 'Processing...' : activeShift ? 'Clock Out' : 'Clock In'}
-      </button>
-    </div>
+    <>
+      {/* Session timeout warning modal */}
+      {sessionWarning && (
+        <SessionTimeoutModal
+          payload={sessionWarning}
+          onAlive={handleSessionAlive}
+          onClockOut={handleSessionClockOut}
+        />
+      )}
+
+      {/* Auto clock-out toast notification */}
+      {autoClockOutToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#111827',
+          color: '#fff',
+          padding: '12px 24px',
+          borderRadius: '12px',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          zIndex: 99999,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          animation: 'fadeInUp 0.3s ease',
+        }}>
+          <svg width="18" height="18" fill="none" stroke="#f97316" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01"/>
+          </svg>
+          {autoClockOutToast}
+          <button
+            onClick={() => setAutoClockOutToast(null)}
+            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', marginLeft: '4px', fontSize: '1rem' }}
+          >✕</button>
+        </div>
+      )}
+
+      <div className={styles.wrapper}>
+        {renderStopwatch()}
+        <button
+          onClick={toggleShift}
+          disabled={isProcessing}
+          className={activeShift ? styles.clockOutBtn : styles.clockBtn}
+        >
+          <svg className={styles.icon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className={styles.btnText}>
+            {isProcessing ? 'Processing...' : activeShift ? 'Clock Out' : 'Clock In'}
+          </span>
+        </button>
+      </div>
+    </>
   );
 }

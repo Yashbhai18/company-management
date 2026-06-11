@@ -8,9 +8,11 @@ const router = Router();
 router.get('/', authenticate, ctrl.getTasks);
 router.post('/', authenticate, authorize('admin', 'super_admin'), ctrl.createTasks);
 router.patch('/stages', authenticate, authorize('admin', 'super_admin'), ctrl.addKanbanStage);
+router.patch('/stages/reorder', authenticate, authorize('admin', 'super_admin'), ctrl.reorderKanbanStages);
 router.delete('/stages/:stageName', authenticate, authorize('admin', 'super_admin'), ctrl.deleteKanbanStage);
 router.patch('/:id/complete', authenticate, ctrl.completeTask);
 router.patch('/:id/stage', authenticate, ctrl.updateTaskStage);
 router.patch('/:id', authenticate, ctrl.updateTask);
+router.post('/:id/comments', authenticate, ctrl.addTaskComment);
 
 export default router;

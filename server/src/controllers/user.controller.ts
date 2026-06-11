@@ -84,15 +84,18 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     // For Admins: Load only EMPLOYEES and reconcile with current daily active entries
     const allUsers = await User.find({ 
       orgId: authedUser.orgId,
-      role: 'employee'
+      role: { $in: ['employee', 'admin', 'super_admin'] }
     })
       .select('name email avatar')
       .lean();
 
-    // Get all entries created today to distinguish between In, Out, and Never started
+    // Get all entries created today OR any currently active (not clocked out) entries
     const todaysEntries = await TimeEntry.find({
       orgId: authedUser.orgId,
-      clockIn: { $gte: startOfToday, $lte: endOfToday }
+      $or: [
+        { clockIn: { $gte: startOfToday, $lte: endOfToday } },
+        { clockOut: { $exists: false } }
+      ]
     }).lean();
 
     const enrichedRoster = allUsers.map((u: any) => {
@@ -100,13 +103,17 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       
       let status = 'absent';
       let locationStatus = 'wfh';
+      let lastClockIn = null;
       
       const activeShift = userEntries.find(e => !e.clockOut);
       if (activeShift) {
         status = 'clocked_in';
         locationStatus = activeShift.locationStatus || 'wfh';
+        lastClockIn = activeShift.clockIn;
       } else if (userEntries.length > 0) {
         status = 'clocked_out';
+        const sorted = [...userEntries].sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
+        lastClockIn = sorted[0]?.clockIn || null;
       }
 
       return {
@@ -115,7 +122,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         email: u.email,
         avatar: u.avatar,
         status,
-        locationStatus
+        locationStatus,
+        lastClockIn
       };
     });
 

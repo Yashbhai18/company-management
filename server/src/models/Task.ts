@@ -10,6 +10,12 @@ export interface IAttachment {
   name: string;
 }
 
+export interface IComment {
+  userId: mongoose.Types.ObjectId;
+  text: string;
+  createdAt: Date;
+}
+
 export interface ITask extends Document {
   orgId: mongoose.Types.ObjectId;
   assignedBy: mongoose.Types.ObjectId;
@@ -25,6 +31,7 @@ export interface ITask extends Document {
   checklist?: IChecklistItem[];
   attachments?: IAttachment[];
   revisionNotes?: string;
+  comments?: IComment[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +62,13 @@ const TaskSchema = new Schema<ITask>(
         name: { type: String, required: true },
       },
     ],
+    comments: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        text: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   { timestamps: true }
 );

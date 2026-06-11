@@ -43,7 +43,7 @@ export default function Verify2faPage() {
     }
   };
 
-  // Handle backspace key press to navigate backwards
+  // Handle key press to navigate or submit
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace') {
       if (!otp[index] && index > 0) {
@@ -56,6 +56,9 @@ export default function Verify2faPage() {
         newOtp[index] = '';
         setOtp(newOtp);
       }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e);
     }
   };
 
@@ -123,8 +126,10 @@ export default function Verify2faPage() {
   return (
     <div className={styles.glassContainer}>
       <div className={styles.header}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-          <span style={{ fontSize: '3rem' }}>🛡️</span>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
+          <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ width: '48px', height: '48px', color: 'var(--primary)' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
         </div>
         <h1 className={styles.title}>Two-Factor Verification</h1>
         <p className={styles.subtitle}>

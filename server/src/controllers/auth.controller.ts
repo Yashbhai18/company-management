@@ -442,3 +442,16 @@ export const delete2faDevice = async (req: Request, res: Response) => {
     return res.status(400).json({ message: err.message || 'Failed to revoke device.' });
   }
 };
+
+/** Verify TOTP for sensitive in-app action (user already authenticated) */
+export const verifyActionTotp = async (req: Request, res: Response) => {
+  const schema = z.object({ code: z.string().min(6).max(10) });
+  try {
+    const body = schema.parse(req.body);
+    const user = (req as any).user as TokenPayload;
+    const result = await authService.verifyActionTotp(user.userId, body.code);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message || 'Verification failed.' });
+  }
+};

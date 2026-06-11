@@ -35,6 +35,7 @@ router.post('/2fa/enable', authenticate, authorize('super_admin', 'admin'), ctrl
 router.post('/2fa/disable', authenticate, authorize('super_admin', 'admin'), ctrl.disable2fa);
 router.delete('/2fa/devices/:deviceId', authenticate, authorize('super_admin', 'admin'), ctrl.delete2faDevice);
 router.post('/2fa/regenerate-backup-codes', authenticate, authorize('super_admin', 'admin'), ctrl.regenerateBackupCodes);
+router.post('/2fa/verify-action', authenticate, ctrl.verifyActionTotp);
 router.post('/magic-link', authLimiter, ctrl.requestMagicLink);
 router.get('/verify', ctrl.verifyMagic);
 router.post('/refresh', ctrl.refresh);

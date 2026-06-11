@@ -62,29 +62,48 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
   const dailyRateRaw = validWorkingDayCount > 0 ? baseSalary / validWorkingDayCount : 0;
   const dailyRate = Number(dailyRateRaw.toFixed(2));
 
-  const attendanceByDay = new Map<string, (typeof timeEntries)[number]>();
+  const entriesByDay = new Map<string, (typeof timeEntries)[number][]>();
   timeEntries.forEach((entry) => {
     const dayKey = toDateKey(entry.clockIn);
-    if (!attendanceByDay.has(dayKey)) {
-      attendanceByDay.set(dayKey, entry);
+    if (!entriesByDay.has(dayKey)) {
+      entriesByDay.set(dayKey, []);
     }
+    entriesByDay.get(dayKey)!.push(entry);
   });
 
   const rows = allDays.map((day) => {
     const dayKey = toDateKey(day);
     const isWorkingDay = !isWeekend(day);
-    const entry = attendanceByDay.get(dayKey);
-    const worked = Boolean(isWorkingDay && entry);
-    const earned = worked ? dailyRate : 0;
+    
+    const dayEntries = entriesByDay.get(dayKey) || [];
+    const totalMinutes = dayEntries.reduce((sum, entry) => sum + (entry.durationMinutes || 0), 0);
+    const hasValidAttendance = Boolean(isWorkingDay && dayEntries.length > 0);
+    
+    let attendanceStatus: 'full' | 'half' | 'absent' = 'absent';
+    let earned = 0;
+    
+    if (hasValidAttendance) {
+      if (totalMinutes >= 420) { // 7 hours
+        attendanceStatus = 'full';
+        earned = dailyRate;
+      } else {
+        attendanceStatus = 'half';
+        earned = Number((dailyRate / 2).toFixed(2));
+      }
+    }
+
+    const firstEntry = dayEntries[0] || null;
+    const lastEntry = dayEntries[dayEntries.length - 1] || null;
 
     return {
       date: dayKey,
       dayName: format(day, 'EEE'),
       isWeekend: !isWorkingDay,
       isWorkingDay,
-      hasValidAttendance: worked,
-      clockIn: entry?.clockIn ? entry.clockIn.toISOString() : null,
-      clockOut: entry?.clockOut ? entry.clockOut.toISOString() : null,
+      hasValidAttendance,
+      attendanceStatus,
+      clockIn: firstEntry?.clockIn ? firstEntry.clockIn.toISOString() : null,
+      clockOut: lastEntry?.clockOut ? lastEntry.clockOut.toISOString() : null,
       earned,
     };
   });
@@ -103,7 +122,7 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
     baseMonthlySalary: baseSalary,
     totalDaysInMonth: allDays.length,
     totalValidWorkingDays: validWorkingDayCount,
-    payableDays: rows.filter((row) => row.hasValidAttendance).length,
+    payableDays: rows.reduce((sum, row) => sum + (row.attendanceStatus === 'full' ? 1 : row.attendanceStatus === 'half' ? 0.5 : 0), 0),
     dailyRate,
     totalSalary: totalEarned,
     rows,
@@ -112,12 +131,12 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
 
 const buildSalaryCsv = (sheet: Awaited<ReturnType<typeof buildSalarySheet>>) => {
   const lines = [
-    ['Date', 'Day', 'Working Day', 'Valid Attendance', 'Clock In', 'Clock Out', 'Daily Rate', 'Earned'],
+    ['Date', 'Day', 'Working Day', 'Attendance Status', 'Clock In', 'Clock Out', 'Daily Rate', 'Earned'],
     ...sheet.rows.map((row) => [
       row.date,
       row.dayName,
       row.isWorkingDay ? 'Yes' : 'No',
-      row.hasValidAttendance ? 'Yes' : 'No',
+      row.isWeekend ? 'Weekend' : row.attendanceStatus === 'full' ? 'Full Day' : row.attendanceStatus === 'half' ? 'Half Day' : 'Absent',
       row.clockIn || '',
       row.clockOut || '',
       row.isWorkingDay ? sheet.dailyRate.toFixed(2) : '0.00',
@@ -241,7 +260,7 @@ export const getHistory = async (req: Request, res: Response) => {
 
     // If user is Admin, explicitly restrict to ONLY TimeEntries belonging to actual employees
     if (isAdmin) {
-      const employees = await User.find({ orgId: user.orgId, role: 'employee' }).select('_id');
+      const employees = await User.find({ orgId: user.orgId, role: { $in: ['employee', 'admin', 'super_admin'] } }).select('_id');
       const empIds = employees.map(e => e._id);
       query.userId = { $in: empIds };
     }
