@@ -31,17 +31,30 @@ api.interceptors.response.use(
   (r) => r,
   async (error) => {
     const original = error.config;
-    if (error.response && error.response.status === 401 && !original._retry) {
-      original._retry = true;
-      try {
-        const resp = await api.post('/auth/refresh');
-        const newAccess = resp.data.accessToken;
-        setAccessToken(newAccess);
-        original.headers['Authorization'] = `Bearer ${newAccess}`;
-        return api(original);
-      } catch (err) {
+    if (error.response && error.response.status === 401) {
+      if (original.url?.includes('/auth/refresh')) {
         setAccessToken(null);
-        throw err;
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
+          window.location.href = '/login';
+        }
+        throw error;
+      }
+
+      if (!original._retry) {
+        original._retry = true;
+        try {
+          const resp = await api.post('/auth/refresh');
+          const newAccess = resp.data.accessToken;
+          setAccessToken(newAccess);
+          original.headers['Authorization'] = `Bearer ${newAccess}`;
+          return api(original);
+        } catch (err) {
+          setAccessToken(null);
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
+            window.location.href = '/login';
+          }
+          throw err;
+        }
       }
     }
     throw error;
