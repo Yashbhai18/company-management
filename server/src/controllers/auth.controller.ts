@@ -4,6 +4,20 @@ import { authService } from '../services/auth.service';
 import type { TokenPayload } from '../utils/token';
 import { NODE_ENV } from '../config/env';
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: NODE_ENV === 'production',
+  sameSite: (NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
+  maxAge: 7 * 24 * 3600 * 1000
+};
+
+const CLEAR_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: NODE_ENV === 'production',
+  sameSite: (NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax'
+};
+
+
 /** Register org + super_admin */
 export const register = async (req: Request, res: Response) => {
   const schema = z.object({ orgName: z.string().min(1), slug: z.string().min(1), name: z.string().min(1), email: z.string().email().optional(), phone: z.string().optional(), password: z.string().min(8) });
@@ -11,7 +25,7 @@ export const register = async (req: Request, res: Response) => {
     const body = schema.parse(req.body);
     const result = await authService.registerOrganization({ orgName: body.orgName, slug: body.slug, name: body.name, email: body.email, phone: body.phone, password: body.password });
     // set refresh cookie
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.status(201).json({ user: result.user, org: result.org, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Registration failed' });
@@ -24,7 +38,7 @@ export const registerEmployee = async (req: Request, res: Response) => {
   try {
     const body = schema.parse(req.body);
     const result = await authService.registerEmployee({ slug: body.slug, name: body.name, email: body.email, password: body.password });
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.status(201).json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Employee registration failed' });
@@ -38,7 +52,7 @@ export const expandOrganization = async (req: Request, res: Response) => {
     const user = (req as any).user as TokenPayload;
     const body = schema.parse(req.body);
     const result = await authService.expandOrganization(user.userId, { orgName: body.orgName, slug: body.slug });
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.status(201).json({ user: result.user, org: result.org, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Expansion failed' });
@@ -63,7 +77,7 @@ export const switchOrg = async (req: Request, res: Response) => {
     const user = (req as any).user as TokenPayload;
     const body = schema.parse(req.body);
     const result = await authService.switchOrganization(user.userId, body.orgId);
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Switch failed' });
@@ -91,7 +105,7 @@ export const login = async (req: Request, res: Response) => {
     if (result.requires2fa) {
       return res.json({ requires2fa: true, tempToken: result.tempToken });
     }
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Login failed' });
@@ -117,7 +131,7 @@ export const verifyMagic = async (req: Request, res: Response) => {
   try {
     const { token } = schema.parse(req.query);
     const result = await authService.verifyMagicLink(String(token));
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Invalid token' });
@@ -166,7 +180,7 @@ export const logout = async (req: Request, res: Response) => {
 
     const raw = req.cookies['refreshToken'];
     if (raw) await authService.revokeRefreshToken(raw);
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', CLEAR_COOKIE_OPTIONS);
     return res.json({ message: 'Logged out' });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Failed' });
@@ -228,7 +242,7 @@ export const completeInvite = async (req: Request, res: Response) => {
       body.countryCode, 
       body.phone
     );
-    res.cookie('refreshToken', result.refreshRaw, { httpOnly: true, secure: NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Failed to complete setup.' });
@@ -356,12 +370,7 @@ export const verify2fa = async (req: Request, res: Response) => {
     });
 
     // Set refresh token cookie on successful authentication
-    res.cookie('refreshToken', result.refreshRaw, { 
-      httpOnly: true, 
-      secure: NODE_ENV === 'production', 
-      sameSite: 'strict', 
-      maxAge: 7 * 24 * 3600 * 1000 
-    });
+    res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
 
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
