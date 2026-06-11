@@ -2,7 +2,9 @@ import crypto from 'crypto';
 import { JWT_SECRET } from '../config/env';
 
 // Derive a 32-byte key from JWT_SECRET for AES-256
+const DEV_JWT_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest();
+const DEFAULT_DEV_KEY = crypto.createHash('sha256').update(DEV_JWT_SECRET).digest();
 const ALGORITHM = 'aes-256-cbc';
 const IV_LENGTH = 16;
 
@@ -29,8 +31,25 @@ export const decrypt = (text: string): string => {
   }
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = Buffer.from(parts[1], 'hex');
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-  const decrypted = decipher.update(encryptedText);
-  const finalBuffer = Buffer.concat([decrypted, decipher.final()]);
-  return finalBuffer.toString('utf8');
+  
+  try {
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+    const decrypted = decipher.update(encryptedText);
+    const finalBuffer = Buffer.concat([decrypted, decipher.final()]);
+    return finalBuffer.toString('utf8');
+  } catch (err) {
+    // If it's a decryption error and we are using a custom production JWT_SECRET,
+    // attempt fallback to the default dev key to authenticate legacy local DB profiles.
+    if (JWT_SECRET !== DEV_JWT_SECRET) {
+      try {
+        const decipher = crypto.createDecipheriv(ALGORITHM, DEFAULT_DEV_KEY, iv);
+        const decrypted = decipher.update(encryptedText);
+        const finalBuffer = Buffer.concat([decrypted, decipher.final()]);
+        return finalBuffer.toString('utf8');
+      } catch (fallbackErr) {
+        // Continue to throw the original error if fallback also fails
+      }
+    }
+    throw err;
+  }
 };
