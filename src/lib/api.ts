@@ -16,7 +16,15 @@ export const setAccessToken = (token: string | null) => {
   }
 };
 
-const api: AxiosInstance = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api', withCredentials: true });
+let apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+if (apiBaseURL && !apiBaseURL.endsWith('/api') && !apiBaseURL.endsWith('/api/')) {
+  apiBaseURL = apiBaseURL.endsWith('/') ? `${apiBaseURL}api` : `${apiBaseURL}/api`;
+}
+
+const api: AxiosInstance = axios.create({ 
+  baseURL: apiBaseURL, 
+  withCredentials: true 
+});
 
 // Attach bearer token from memory
 api.interceptors.request.use((config) => {
