@@ -17,6 +17,9 @@ import { CLIENT_URL, NODE_ENV } from './config/env';
 /** Create and configure express app */
 export const createApp = () => {
   const app = express();
+  if (NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
   app.use(helmet());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));

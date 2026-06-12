@@ -2,15 +2,28 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 /** In-memory access token storage — never persist to localStorage */
 let accessToken: string | null = null;
+
+if (typeof window !== 'undefined') {
+  const match = document.cookie.match(/(^|;)\s*accessToken\s*=\s*([^;]+)/);
+  if (match) {
+    try {
+      accessToken = decodeURIComponent(match[2]);
+    } catch {
+      accessToken = match[2];
+    }
+  }
+}
+
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
   if (typeof window !== 'undefined') {
     if (token) {
+      const isSecure = window.location.protocol === 'https:';
       // Store short-lived session cookie for middleware visibility
-      document.cookie = `accessToken=${token}; path=/; max-age=900; SameSite=Strict`; 
+      document.cookie = `accessToken=${encodeURIComponent(token)}; path=/; max-age=900; SameSite=Strict${isSecure ? '; Secure' : ''}`; 
     } else {
       // Clear it
-      document.cookie = `accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      document.cookie = `accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Strict`;
     }
     window.dispatchEvent(new CustomEvent('accessTokenChanged', { detail: token }));
   }
