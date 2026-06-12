@@ -94,11 +94,11 @@ export default function ClockInOutButton() {
     };
   }, [socket, fetchShiftStatus]);
 
-  // Background synchronization loop: ensure correct global state every 6s
+  // Background synchronization loop: ensure correct global state every 30s
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchShiftStatus();
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchShiftStatus]);
 

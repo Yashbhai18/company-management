@@ -98,11 +98,11 @@ export default function PeoplePage() {
     fetchData();
   }, [fetchData]);
 
-  // INSTANT REFRESH ENGINE: Synchronize both personnel lists and submission requests every 6 seconds
+  // INSTANT REFRESH ENGINE: Synchronize both personnel lists and submission requests every 30 seconds
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

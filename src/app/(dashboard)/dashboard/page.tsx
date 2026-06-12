@@ -70,11 +70,11 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // CONTINUOUS INSTANT REFRESH ENGINE: Background updates every 6 seconds
+  // CONTINUOUS INSTANT REFRESH ENGINE: Background updates every 30 seconds
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

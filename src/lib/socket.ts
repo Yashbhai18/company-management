@@ -19,7 +19,22 @@ export function getSocket(token: string): Socket {
     socket = null;
   }
 
-  socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000', {
+  let socketURL = process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (!socketURL) {
+    const apiURL = process.env.NEXT_PUBLIC_API_URL;
+    if (apiURL) {
+      try {
+        const url = new URL(apiURL);
+        socketURL = url.origin;
+      } catch {
+        socketURL = apiURL.replace(/\/api\/?$/, '');
+      }
+    } else {
+      socketURL = 'http://localhost:4000';
+    }
+  }
+
+  socket = io(socketURL, {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,

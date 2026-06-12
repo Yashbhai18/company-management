@@ -150,11 +150,11 @@ export default function TimesheetsPage() {
     fetchHistory(false);
   }, [fetchHistory]);
 
-  // INSTANT REFRESH ENGINE: Poll for shift completions silently every 6 seconds
+  // INSTANT REFRESH ENGINE: Poll for shift completions silently every 30 seconds
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchHistory(true);
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchHistory]);
 

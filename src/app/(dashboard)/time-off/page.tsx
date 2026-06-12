@@ -149,11 +149,11 @@ export default function TimeOffPage() {
     fetchData();
   }, [fetchData]);
 
-  // CONTINUOUS BACKGROUND REAL-TIME UPDATES: Every 6 seconds
+  // CONTINUOUS BACKGROUND REAL-TIME UPDATES: Every 30 seconds
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
-    }, 6000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
