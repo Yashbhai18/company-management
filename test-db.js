@@ -1,5 +1,10 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
-const uri = "mongodb://ThinkX:11006618@ac-oegcwrk-shard-00-00.ytwfy5a.mongodb.net:27017,ac-oegcwrk-shard-00-01.ytwfy5a.mongodb.net:27017,ac-oegcwrk-shard-00-02.ytwfy5a.mongodb.net:27017/jibble_clone?ssl=true&replicaSet=atlas-oegcwrk-shard-0&authSource=admin";
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+    console.error("MONGODB_URI is not defined in environment variables");
+    process.exit(1);
+}
 mongoose.connect(uri).then(() => {
     console.log("Connected successfully");
     process.exit(0);

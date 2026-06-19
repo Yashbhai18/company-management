@@ -4,7 +4,6 @@ import Link from 'next/link';
 import api from '../../lib/api';
 import styles from './header.module.css';
 import NotificationDrawer from './NotificationDrawer';
-import ClockInOutButton from './ClockInOutButton';
 import { useDialog } from '../ui/DialogProvider';
 
 export default function Header() {
@@ -274,11 +273,6 @@ export default function Header() {
 
       {/* Header Actions */}
       <div className={styles.headerActions}>
-        {/* Global Punch Clock Controls */}
-        <ClockInOutButton />
-
-        <div className={styles.dividerVertical} />
-
         {/* Global Sitewide Search Container */}
         <div className={styles.searchContainer} ref={searchContainerRef}>
           <svg className={styles.searchIcon} fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
@@ -298,9 +292,16 @@ export default function Header() {
           {showSearchOverlay && (
             <div className={styles.searchOverlay}>
               {isSearching ? (
-                <div className={styles.searchLoader}>
-                  <div className={styles.spinner}></div>
-                  Searching corporate records...
+                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[1, 2, 3].map(n => (
+                    <div key={n} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div className="skeleton skeleton-avatar" style={{ width: '28px', height: '28px' }}></div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div className="skeleton skeleton-text" style={{ width: '50%', height: '12px', marginBottom: 0 }}></div>
+                        <div className="skeleton skeleton-text" style={{ width: '80%', height: '10px', marginBottom: 0 }}></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 (() => {
@@ -338,23 +339,37 @@ export default function Header() {
                       {searchResults.messages?.length > 0 && (
                         <div className={styles.searchCategory}>
                           <div className={styles.searchCategoryTitle}>Chat Messages ({searchResults.messages.length})</div>
-                          {searchResults.messages.map((msg: any) => (
-                            <Link 
-                              key={msg._id} 
-                              href={`/chat?user=${msg.senderId?._id || ''}`} 
-                              onClick={() => { setShowSearchOverlay(false); setSearchVal(''); }} 
-                              className={styles.searchResultItem}
-                            >
-                              <span className={styles.searchResultIcon}>💬</span>
-                              <div className={styles.searchResultMeta}>
-                                <span className={styles.searchResultName}>{msg.senderId?.name || 'User'}</span>
-                                <span className={styles.searchResultDesc}>{msg.content}</span>
-                              </div>
-                              <span className={styles.searchResultTime}>
-                                {new Date(msg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                              </span>
-                            </Link>
-                          ))}
+                          {searchResults.messages.map((msg: any) => {
+                            const chatHref = msg.type === 'org_chat'
+                              ? `/chat?view=org&messageId=${msg._id}`
+                              : `/chat?conversation=${msg.conversationId || ''}&messageId=${msg._id}`;
+                            const initials = msg.senderName
+                              ? msg.senderName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                              : 'U';
+                            return (
+                              <Link 
+                                key={msg._id} 
+                                href={chatHref} 
+                                onClick={() => { setShowSearchOverlay(false); setSearchVal(''); }} 
+                                className={styles.searchResultItem}
+                              >
+                                <div className={styles.searchResultAvatar}>
+                                  {msg.senderAvatar ? (
+                                    <img src={msg.senderAvatar} className={styles.avatarImg} alt="" />
+                                  ) : (
+                                    initials
+                                  )}
+                                </div>
+                                <div className={styles.searchResultMeta}>
+                                  <span className={styles.searchResultName}>{msg.senderName || 'User'}</span>
+                                  <span className={styles.searchResultDesc}>{msg.content}</span>
+                                </div>
+                                <span className={styles.searchResultTime}>
+                                  {new Date(msg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </span>
+                              </Link>
+                            );
+                          })}
                         </div>
                       )}
 

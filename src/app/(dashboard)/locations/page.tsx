@@ -215,7 +215,7 @@ export default function LocationsPage() {
             />
             {isSearchingLocation && (
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
-                <div className={styles.spinnerSmall}></div>
+                <div className="skeleton" style={{ width: '12px', height: '12px', borderRadius: '50%' }}></div>
               </div>
             )}
 
@@ -252,7 +252,15 @@ export default function LocationsPage() {
 
         <div className={styles.locationList}>
           {isLoading ? (
-            <div className={styles.emptyState}>Loading...</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' }}>
+              {[1, 2, 3].map((n) => (
+                <div key={n} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', background: 'var(--canvas-soft)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="skeleton skeleton-title" style={{ width: '45%', height: '18px', marginBottom: 0 }}></div>
+                  <div className="skeleton skeleton-text" style={{ width: '85%', height: '14px', marginBottom: 0 }}></div>
+                  <div className="skeleton skeleton-text" style={{ width: '65%', height: '10px', marginBottom: 0 }}></div>
+                </div>
+              ))}
+            </div>
           ) : filteredLocations.length === 0 ? (
             <div className={styles.emptyState}>
               <div style={{ background: 'rgba(99, 102, 241, 0.1)', width: '120px', height: '120px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem' }}>

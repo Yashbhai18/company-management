@@ -8,9 +8,10 @@ import { generateAccessToken, TokenPayload, generateTemp2faToken } from '../util
 import { generateRefreshToken, hashToken } from '../utils/hash';
 import mongoose from 'mongoose';
 import { addMinutes, addDays } from 'date-fns';
-import { sendInviteEmail, sendMagicLinkEmail } from './email.service';
+import { sendInviteEmail, sendMagicLinkEmail, sendWelcomeEmail, sendLoginAlertEmail } from './email.service';
 import { v4 as uuidv4 } from 'uuid';
 import { notificationService } from './notification.service';
+import { CLIENT_URL } from '../config/env';
 
 /** Business logic for auth operations */
 export const authService = {
@@ -61,6 +62,17 @@ export const authService = {
       const refresh = generateRefreshToken();
       const expiresAt = addDays(new Date(), 7);
       await RefreshToken.create({ userId: user[0]._id, token: refresh.hashed, expiresAt });
+
+      if (params.email) {
+        const raw = uuidv4() + '.' + cryptoRandomHex(32);
+        const hashed = hashToken(raw);
+        const magicExpiresAt = addDays(new Date(), 1);
+        await MagicLink.create([{ userId: user[0]._id, token: hashed, expiresAt: magicExpiresAt, used: false }], { session });
+
+        const cleanClientUrl = CLIENT_URL.endsWith('/') ? CLIENT_URL.slice(0, -1) : CLIENT_URL;
+        const verificationLink = `${cleanClientUrl}/login/verify?token=${raw}`;
+        sendWelcomeEmail(params.email, params.name, verificationLink).catch((e) => console.error('Failed to send welcome email:', e));
+      }
 
       return { user: user[0], org: orgDoc, accessToken, refreshRaw: refresh.raw };
     } catch (err) {
@@ -161,6 +173,17 @@ export const authService = {
     const refresh = generateRefreshToken();
     const expiresAt = addDays(new Date(), 7);
     await RefreshToken.create({ userId: user._id, token: refresh.hashed, expiresAt });
+
+    if (params.email) {
+      const raw = uuidv4() + '.' + cryptoRandomHex(32);
+      const hashed = hashToken(raw);
+      const magicExpiresAt = addDays(new Date(), 1);
+      await MagicLink.create({ userId: user._id, token: hashed, expiresAt: magicExpiresAt, used: false });
+
+      const cleanClientUrl = CLIENT_URL.endsWith('/') ? CLIENT_URL.slice(0, -1) : CLIENT_URL;
+      const verificationLink = `${cleanClientUrl}/login/verify?token=${raw}`;
+      sendWelcomeEmail(params.email, params.name, verificationLink).catch((e) => console.error('Failed to send welcome email:', e));
+    }
 
     return { user, accessToken, refreshRaw: refresh.raw };
   },
@@ -412,6 +435,8 @@ export const authService = {
     rememberMe?: boolean; 
     targetRole?: 'organization' | 'employee';
     orgSlug?: string; // NEW parameter enabling multi-org isolation!
+    ipAddress?: string;
+    userAgent?: string;
   }) => {
     let query: any = { 
       $or: [
@@ -485,6 +510,11 @@ export const authService = {
     await RefreshToken.create({ userId: user._id, token: refresh.hashed, expiresAt });
     user.lastLogin = new Date();
     await user.save();
+
+    if (user.email) {
+      sendLoginAlertEmail(user.email, user.name, params.ipAddress, params.userAgent).catch((e) => console.error('Failed to send login alert email:', e));
+    }
+
     return { user, accessToken, refreshRaw: refresh.raw };
   },
 
@@ -496,7 +526,8 @@ export const authService = {
     const hashed = hashToken(raw);
     const expiresAt = addMinutes(new Date(), 15);
     await MagicLink.create({ userId: user._id, token: hashed, expiresAt, used: false });
-    const link = `${baseUrl}/api/auth/verify?token=${raw}`;
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const link = `${cleanBaseUrl}/login/verify?token=${raw}`;
     await sendMagicLinkEmail(user.email!, user.name, link);
   },
 
@@ -956,6 +987,10 @@ export const authService = {
       ipAddress: params.ipAddress,
       userAgent: params.userAgent
     });
+
+    if (user.email) {
+      sendLoginAlertEmail(user.email, user.name, params.ipAddress, params.userAgent).catch((e) => console.error('Failed to send login alert email:', e));
+    }
 
     return { user, accessToken, refreshRaw: refresh.raw };
   },

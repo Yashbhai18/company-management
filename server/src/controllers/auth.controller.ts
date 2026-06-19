@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { authService } from '../services/auth.service';
 import type { TokenPayload } from '../utils/token';
-import { NODE_ENV } from '../config/env';
+import { NODE_ENV, CLIENT_URL } from '../config/env';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -84,7 +84,7 @@ export const switchOrg = async (req: Request, res: Response) => {
   }
 };
 
-/** Login with password */
+/** Login with password (triggers email notification) */
 export const login = async (req: Request, res: Response) => {
   const schema = z.object({ 
     identifier: z.string(), 
@@ -100,7 +100,9 @@ export const login = async (req: Request, res: Response) => {
       password: body.password, 
       rememberMe: body.rememberMe,
       targetRole: body.targetRole,
-      orgSlug: body.orgSlug
+      orgSlug: body.orgSlug,
+      ipAddress: req.ip || undefined,
+      userAgent: req.headers['user-agent'] || undefined
     });
     if (result.requires2fa) {
       return res.json({ requires2fa: true, tempToken: result.tempToken });
@@ -117,7 +119,7 @@ export const requestMagicLink = async (req: Request, res: Response) => {
   const schema = z.object({ email: z.string().email() });
   try {
     const { email } = schema.parse(req.body);
-    const baseUrl = req.body.baseUrl || process.env.CLIENT_URL || '';
+    const baseUrl = req.body.baseUrl || CLIENT_URL;
     await authService.createMagicLink(email, baseUrl);
     return res.json({ message: 'Magic link sent' });
   } catch (err: any) {
@@ -197,7 +199,7 @@ export const invite = async (req: Request, res: Response) => {
   });
   try {
     const body = schema.parse(req.body);
-    const baseUrl = process.env.CLIENT_URL || '';
+    const baseUrl = CLIENT_URL;
     const authedReq = req as Request & { user: TokenPayload };
     const user = await authService.inviteMember({ 
       orgId: authedReq.user.orgId, 

@@ -1072,6 +1072,7 @@
   white-space: pre-line;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1695,4 +1696,24 @@
 .navIcon {
   width: 16px;
   height: 16px;
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .taskCard {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .taskActionsCell {
+    padding-left: 0;
+    justify-content: flex-end;
+  }
 }

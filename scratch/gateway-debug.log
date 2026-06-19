@@ -57,3 +57,6 @@
 [2026-06-10T15:15:24.894Z] chat:react saved to DB. Reactions array: [{"emoji":"👍","userIds":["6a02d9806b830424cb2b9f71"],"_id":"6a297e76abce76bc49475eec"}]
 [2026-06-10T15:15:24.956Z] chat:react broadcast to user room: user:6a02d9806b830424cb2b9f71
 [2026-06-10T15:15:24.956Z] chat:react broadcast to user room: user:6a05792d7e44b5cc30c8a1f5
+[2026-06-19T15:39:05.362Z] chat:react received for messageId: 6a06c7f77411e12e5d32f5f3, emoji: 😂, userId: 6a05792d7e44b5cc30c8a1f5
+[2026-06-19T15:39:05.481Z] chat:react saved to DB. Reactions array: [{"emoji":"😂","userIds":["6a02f28fcfb483007f228451","6a05792d7e44b5cc30c8a1f5"],"_id":"6a2525bee245db8e2cdab0dc"}]
+[2026-06-19T15:39:05.519Z] chat:react broadcast to org room: org:6a02d9806b830424cb2b9f70

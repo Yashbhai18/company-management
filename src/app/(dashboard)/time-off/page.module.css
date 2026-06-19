@@ -1129,3 +1129,15 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
 }
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .headerRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

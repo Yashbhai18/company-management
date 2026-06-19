@@ -586,7 +586,39 @@ export default function TimesheetsPage() {
       </div>
 
       {isLoading ? (
-        <div className={styles.loaderContainer}><div className={styles.loader}></div></div>
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {currentUser?.role !== 'employee' && <th>Member</th>}
+                <th>Date</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Location</th>
+                <th>Calculated Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <tr key={n}>
+                  {currentUser?.role !== 'employee' && (
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="skeleton skeleton-avatar" style={{ width: '24px', height: '24px' }}></div>
+                        <div className="skeleton skeleton-text" style={{ width: '60px', height: '14px', marginBottom: 0 }}></div>
+                      </div>
+                    </td>
+                  )}
+                  <td><div className="skeleton skeleton-text" style={{ width: '100px', height: '14px', marginBottom: 0 }}></div></td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '60px', height: '14px', marginBottom: 0 }}></div></td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '60px', height: '14px', marginBottom: 0 }}></div></td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '50px', height: '14px', marginBottom: 0 }}></div></td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '70px', height: '14px', marginBottom: 0 }}></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : viewMode === 'list' ? (
         sortedEntries.length === 0 ? (
           <div className={styles.emptyCard}>
@@ -657,7 +689,10 @@ export default function TimesheetsPage() {
           <div className={styles.calendarGrid}>
             {/* Calendar Headers */}
             {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
-              <div key={day} className={styles.calendarHeaderCell}>{day}</div>
+              <div key={day} className={styles.calendarHeaderCell}>
+                <span className={styles.fullDayName}>{day}</span>
+                <span className={styles.shortDayName}>{day.substring(0, 3)}</span>
+              </div>
             ))}
 
             {/* Calendar Days */}

@@ -39,7 +39,7 @@ export const searchAll = async (req: Request, res: Response) => {
       })
         .sort({ createdAt: -1 })
         .limit(5)
-        .select('content senderName type createdAt'),
+        .select('content senderName senderAvatar senderId conversationId type createdAt parentId'),
 
       // 3. Search Holidays
       Holiday.find({

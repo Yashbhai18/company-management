@@ -1,6 +1,10 @@
 import { io, Socket } from 'socket.io-client';
 
-let socket: Socket | null = null;
+const globalWithSocket = globalThis as typeof globalThis & {
+  socket?: Socket;
+};
+
+let socket: Socket | null = globalWithSocket.socket || null;
 
 /** Get or create the singleton socket instance, authenticated with the given token */
 export function getSocket(token: string): Socket {
@@ -17,6 +21,7 @@ export function getSocket(token: string): Socket {
   if (socket) {
     socket.disconnect();
     socket = null;
+    globalWithSocket.socket = undefined;
   }
 
   let socketURL = process.env.NEXT_PUBLIC_SOCKET_URL;
@@ -44,6 +49,7 @@ export function getSocket(token: string): Socket {
     timeout: 10000,
   });
 
+  globalWithSocket.socket = socket;
   return socket;
 }
 
@@ -51,6 +57,7 @@ export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
+    globalWithSocket.socket = undefined;
   }
 }
 

@@ -312,7 +312,34 @@ export default function PeoplePage() {
       </header>
 
       {isLoading ? (
-        <div className={styles.loaderContainer}><div className={styles.loader}></div></div>
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <tr key={n}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div className="skeleton skeleton-avatar" style={{ width: '40px', height: '40px' }}></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                        <div className="skeleton skeleton-text" style={{ width: '120px', height: '14px', marginBottom: 0 }}></div>
+                        <div className="skeleton skeleton-text" style={{ width: '180px', height: '10px', marginBottom: 0 }}></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '80px', height: '14px', marginBottom: 0 }}></div></td>
+                  <td><div className="skeleton skeleton-text" style={{ width: '100px', height: '14px', marginBottom: 0 }}></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <>
           {/* PENDING REQUESTS QUEUE CARD */}

@@ -130,3 +130,104 @@
     font-size: 0.8rem;
   }
 }
+
+/* ── Floating Action Button (FAB) styles for mobile ──────────────────────── */
+.floatingWrapper {
+  position: fixed;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  right: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 995;
+  animation: floatIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.floatingClockBtn,
+.floatingClockOutBtn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.floatingClockBtn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+.floatingClockBtn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.45);
+}
+
+.floatingClockOutBtn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+}
+
+.floatingClockOutBtn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.45);
+}
+
+.floatingIcon {
+  width: 24px;
+  height: 24px;
+}
+
+.floatingStopwatch {
+  background: rgba(255, 254, 251, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(32, 21, 21, 0.1);
+  padding: 0.5rem 0.85rem;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 20px rgba(32, 21, 21, 0.08);
+  animation: slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.floatingStopwatchText {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink, #201515);
+  letter-spacing: 0.05em;
+}
+
+@keyframes slideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (min-width: 1025px) {
+  .floatingWrapper {
+    display: none !important;
+  }
+}

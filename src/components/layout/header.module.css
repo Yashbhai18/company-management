@@ -751,7 +751,7 @@
 
 @media (max-width: 1024px) {
   .mobileMenuToggle {
-    display: inline-flex;
+    display: none;
   }
 }
 

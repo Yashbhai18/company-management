@@ -1,0 +1,106 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  width: 100%;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--canvas);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 3rem 2.5rem;
+  box-shadow: 0 8px 30px rgba(32, 21, 21, 0.08);
+  text-align: center;
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.loadingState, .successState, .errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.card h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.desc {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.iconSuccess {
+  width: 56px;
+  height: 56px;
+  background: rgba(39, 103, 62, 0.1);
+  color: var(--success);
+  border-radius: 50%;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.iconError {
+  width: 56px;
+  height: 56px;
+  background: rgba(192, 57, 43, 0.1);
+  color: var(--error);
+  border-radius: 50%;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.btnLink {
+  display: inline-block;
+  background: var(--canvas-soft);
+  color: var(--text-color);
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+  margin-top: 1rem;
+}
+
+.btnLink:hover {
+  background: var(--canvas);
+  border-color: var(--primary);
+}

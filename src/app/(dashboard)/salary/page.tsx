@@ -132,6 +132,7 @@ function SalaryPageContent() {
   const [inputSalary, setInputSalary] = React.useState('10000');
   const [reloadTrigger, setReloadTrigger] = React.useState(0);
   const [employeeDropdownOpen, setEmployeeDropdownOpen] = React.useState(false);
+  const [employeeSearch, setEmployeeSearch] = React.useState('');
   const employeeDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // Sync buffer input salary when sheet loads/changes
@@ -238,6 +239,13 @@ function SalaryPageContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [employeeDropdownOpen]);
 
+  // Reset employee search query when dropdown closes
+  React.useEffect(() => {
+    if (!employeeDropdownOpen) {
+      setEmployeeSearch('');
+    }
+  }, [employeeDropdownOpen]);
+
   React.useEffect(() => {
     if (!selectedUserId) {
       if (viewer) {
@@ -273,6 +281,13 @@ function SalaryPageContent() {
     if (!sheet) return [] as SalaryRow[];
     return [...sheet.rows].sort((left, right) => compareValues(left, right, sortKey, sortDirection));
   }, [sheet, sortKey, sortDirection]);
+
+  const filteredEmployees = React.useMemo(() => {
+    return employees.filter(e => {
+      const q = employeeSearch.toLowerCase();
+      return e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q);
+    });
+  }, [employees, employeeSearch]);
 
   const updateMonth = (nextMonth: string) => {
     const nextUrl = new URL(window.location.href);
@@ -399,22 +414,37 @@ function SalaryPageContent() {
 
               {isAdminViewer && employeeDropdownOpen && (
                 <div className={styles.employeeDropdownMenu}>
-                  {employees.map(e => (
-                    <div 
-                      key={e._id} 
-                      className={`${styles.employeeDropdownItem} ${e._id === selectedUserId ? styles.activeItem : ''}`}
-                      onClick={() => {
-                        updateEmployee(e._id);
-                        setEmployeeDropdownOpen(false);
-                      }}
-                    >
-                      <div className={styles.miniAvatar}>{e.name.charAt(0)}</div>
-                      <div className={styles.employeeInfo}>
-                        <div className={styles.dropItemName}>{e.name}</div>
-                        <div className={styles.dropItemEmail}>{e.email}</div>
+                  <div className={styles.dropdownSearchWrapper} onClick={e => e.stopPropagation()}>
+                    <input 
+                      type="text" 
+                      placeholder="Search employees..." 
+                      className={styles.dropdownSearchInput}
+                      value={employeeSearch}
+                      onChange={(ev) => setEmployeeSearch(ev.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className={styles.dropdownItemsList}>
+                    {filteredEmployees.map(e => (
+                      <div 
+                        key={e._id} 
+                        className={`${styles.employeeDropdownItem} ${e._id === selectedUserId ? styles.activeItem : ''}`}
+                        onClick={() => {
+                          updateEmployee(e._id);
+                          setEmployeeDropdownOpen(false);
+                        }}
+                      >
+                        <div className={styles.miniAvatar}>{e.name.charAt(0)}</div>
+                        <div className={styles.employeeInfo}>
+                          <div className={styles.dropItemName}>{e.name}</div>
+                          <div className={styles.dropItemEmail}>{e.email}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                    {filteredEmployees.length === 0 && (
+                      <div className={styles.noEmployeesFound}>No employees match "{employeeSearch}"</div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -424,7 +454,19 @@ function SalaryPageContent() {
         {error && <div className={styles.errorBox}>{error}</div>}
 
         {isLoading ? (
-          <div className={styles.loadingBox}>Loading salary sheet...</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className={styles.summaryGrid}>
+              {[1, 2, 3, 4].map(n => (
+                <div key={n} className={styles.summaryCard} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="skeleton skeleton-text" style={{ width: '50%', height: '14px', marginBottom: 0 }}></div>
+                  <div className="skeleton skeleton-text" style={{ width: '80%', height: '24px', marginBottom: 0 }}></div>
+                </div>
+              ))}
+            </div>
+            <div className={styles.tableWrapper}>
+              <div className="skeleton" style={{ height: '300px', borderRadius: 'var(--radius-md)' }}></div>
+            </div>
+          </div>
         ) : sheet ? (
           <>
             <div className={styles.summaryGrid}>

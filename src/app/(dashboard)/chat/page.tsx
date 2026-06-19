@@ -1,5 +1,6 @@
 "use client";
 import React from 'react';
+import { useSearchParams } from 'next/navigation';
 import api from '../../../lib/api';
 import { useSocket } from '../../../hooks/useSocket';
 import { getExistingSocket } from '../../../lib/socket';
@@ -116,8 +117,10 @@ function MentionPopup({ members, onSelect, popupRef }: { members: Member[]; onSe
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export default function ChatPage() {
+  const searchParams = useSearchParams();
   const socket = useSocket();
   const [me, setMe] = React.useState<any>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = React.useState<string | null>(null);
   const [members, setMembers] = React.useState<Member[]>([]);
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
 
@@ -222,7 +225,7 @@ export default function ChatPage() {
 
   // Scroll to bottom when messages arrive or people type
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [orgMessages, dmMessages, activeConvId, typingState]);
 
   // Load current user + members
@@ -238,20 +241,31 @@ export default function ChatPage() {
     }
   }, []);
 
-  // Handle URL params (?view=org or ?dm=userId)
+  // Handle URL params (?view=org, ?dm=userId, ?conversation=conversationId)
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const dm = params.get('dm');
-    const viewParam = params.get('view');
+    const dm = searchParams.get('dm');
+    const viewParam = searchParams.get('view');
+    const conversationParam = searchParams.get('conversation');
+
     if (dm) {
       openDm(dm);
       setMobileActiveView('chat');
     } else if (viewParam === 'org') {
       setView('org');
       setMobileActiveView('chat');
+    } else if (conversationParam && conversations.length > 0) {
+      const c = conversations.find((x) => x._id === conversationParam);
+      if (c) {
+        if (c.isGroup) {
+          openGroup(conversationParam);
+        } else if (c.otherUser?._id) {
+          openDm(c.otherUser._id);
+        }
+      }
+      setMobileActiveView('chat');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, conversations]);
 
   // Automatically reset and stop typing indicators whenever changing chat rooms
   React.useEffect(() => {
@@ -820,7 +834,11 @@ export default function ChatPage() {
     const finalAvatar = msg.senderAvatar || (isMe ? me?.avatar : members.find((m) => m._id === msg.senderId)?.avatar);
 
     return (
-      <div key={msg._id} className={`${styles.messageRow} ${isMe ? styles.messageRowMe : ''}`}>
+      <div 
+        key={msg._id} 
+        id={`message-${msg._id}`} 
+        className={`${styles.messageRow} ${isMe ? styles.messageRowMe : ''} ${highlightedMessageId === msg._id ? styles.highlightedMessage : ''}`}
+      >
         {!isMe && (
           <div className={`${styles.msgAvatar} ${showAvatar ? '' : styles.msgAvatarHidden}`}>
             {showAvatar && (
@@ -1097,14 +1115,113 @@ export default function ChatPage() {
   const displayMessages = view === 'org' ? orgMessages : activeConvMessages;
   const isChatLoading = view === 'org' ? (loadingOrg && orgMessages.length === 0) : loadingDm;
 
-  const filteredMessages = displayMessages.filter(msg => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      msg.content.toLowerCase().includes(q) ||
-      msg.senderName.toLowerCase().includes(q)
+  // Scroll to and highlight a specific message if messageId is passed in searchParams
+  React.useEffect(() => {
+    const messageIdToScroll = searchParams.get('messageId');
+    if (!messageIdToScroll || isChatLoading) return;
+    
+    // Check if the message is in the loaded messages
+    const messageExists = displayMessages.some((m) => m._id === messageIdToScroll);
+    if (!messageExists) return;
+    
+    const timer = setTimeout(() => {
+      const element = document.getElementById(`message-${messageIdToScroll}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageIdToScroll);
+        
+        const highlightTimer = setTimeout(() => {
+          setHighlightedMessageId(null);
+        }, 2500);
+        
+        return () => clearTimeout(highlightTimer);
+      }
+    }, 150);
+    
+    return () => clearTimeout(timer);
+  }, [searchParams, displayMessages, isChatLoading]);
+
+  const filteredMessages = React.useMemo(() => {
+    return displayMessages.filter(msg => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        msg.content.toLowerCase().includes(q) ||
+        msg.senderName.toLowerCase().includes(q)
+      );
+    });
+  }, [displayMessages, searchQuery]);
+
+  const renderedMessageList = React.useMemo(() => {
+    return filteredMessages.map((msg, idx) => renderMessageRow(msg, idx, filteredMessages, false));
+  }, [filteredMessages, me, members, view, editingMessageId, editingContent, activeReactionMessageId, highlightedMessageId, replyTo]);
+
+  const renderedThreadParent = React.useMemo(() => {
+    if (!activeThread) return null;
+    return renderMessageRow(activeThread.parent, 0, [activeThread.parent], true);
+  }, [activeThread?.parent, me, members, view, editingMessageId, editingContent, activeReactionMessageId, highlightedMessageId]);
+
+  const renderedThreadReplies = React.useMemo(() => {
+    if (!activeThread) return [];
+    return activeThread.replies.map((msg, idx) => 
+      renderMessageRow(msg, idx, activeThread.replies, true)
     );
-  });
+  }, [activeThread?.replies, me, members, view, editingMessageId, editingContent, activeReactionMessageId, highlightedMessageId]);
+
+  const renderedGroupList = React.useMemo(() => {
+    return conversations.filter(c => c.isGroup).map((conv) => (
+      <div
+        key={conv._id}
+        className={`${styles.groupItem} ${view === conv._id ? styles.groupActive : ''}`}
+        onClick={() => openGroup(conv._id)}
+      >
+        <div className={styles.groupAvatar}>
+          {getInitials(conv.name || 'Group')}
+        </div>
+        <div className={styles.groupInfo}>
+          <span className={styles.groupName}>{conv.name}</span>
+          {conv.lastMessage && (
+            <span className={styles.groupPreview}>
+              {conv.lastMessage.slice(0, 30)}{conv.lastMessage.length > 30 ? '…' : ''}
+            </span>
+          )}
+        </div>
+        {conv.unreadCount > 0 && (
+          <span className={styles.unreadBadge}>{conv.unreadCount}</span>
+        )}
+      </div>
+    ));
+  }, [conversations, view]);
+
+  const renderedDmList = React.useMemo(() => {
+    return members.map((member) => {
+      const conv = conversations.find((c) => c.otherUser?._id === member._id);
+      return (
+        <div
+          key={member._id}
+          className={`${styles.dmItem} ${view === member._id ? styles.dmActive : ''}`}
+          onClick={() => openDm(member._id)}
+        >
+          <div className={styles.dmAvatar}>
+            {member.avatar ? (
+              <img src={member.avatar} alt="" className={styles.avatarImg} />
+            ) : (
+              getInitials(member.name)
+            )}
+          </div>
+          <div className={styles.dmInfo}>
+            <span className={styles.dmName}>{member.name}</span>
+            {conv?.lastMessage && (
+              <span className={styles.dmPreview}>{conv.lastMessage.slice(0, 30)}{conv.lastMessage.length > 30 ? '…' : ''}</span>
+            )}
+          </div>
+          {conv && conv.unreadCount > 0 && (
+            <span className={styles.unreadBadge}>{conv.unreadCount}</span>
+          )}
+        </div>
+      );
+    });
+  }, [members, conversations, view]);
 
   return (
     <div className={`${styles.container} ${mobileActiveView === 'chat' ? styles.showChatMobile : styles.showSidebarMobile}`}>
@@ -1148,60 +1265,13 @@ export default function ChatPage() {
         </div>
 
         {/* Group Channels List */}
-        {conversations.filter(c => c.isGroup).map((conv) => (
-          <div
-            key={conv._id}
-            className={`${styles.groupItem} ${view === conv._id ? styles.groupActive : ''}`}
-            onClick={() => openGroup(conv._id)}
-          >
-            <div className={styles.groupAvatar}>
-              {getInitials(conv.name || 'Group')}
-            </div>
-            <div className={styles.groupInfo}>
-              <span className={styles.groupName}>{conv.name}</span>
-              {conv.lastMessage && (
-                <span className={styles.groupPreview}>
-                  {conv.lastMessage.slice(0, 30)}{conv.lastMessage.length > 30 ? '…' : ''}
-                </span>
-              )}
-            </div>
-            {conv.unreadCount > 0 && (
-              <span className={styles.unreadBadge}>{conv.unreadCount}</span>
-            )}
-          </div>
-        ))}
+        {renderedGroupList}
 
         <div className={styles.divider} />
         <div className={styles.sectionLabel}>Direct Messages</div>
 
         {/* DM list */}
-        {members.map((member) => {
-          const conv = conversations.find((c) => c.otherUser?._id === member._id);
-          return (
-            <div
-              key={member._id}
-              className={`${styles.dmItem} ${view === member._id ? styles.dmActive : ''}`}
-              onClick={() => openDm(member._id)}
-            >
-              <div className={styles.dmAvatar}>
-                {member.avatar ? (
-                  <img src={member.avatar} alt="" className={styles.avatarImg} />
-                ) : (
-                  getInitials(member.name)
-                )}
-              </div>
-              <div className={styles.dmInfo}>
-                <span className={styles.dmName}>{member.name}</span>
-                {conv?.lastMessage && (
-                  <span className={styles.dmPreview}>{conv.lastMessage.slice(0, 30)}{conv.lastMessage.length > 30 ? '…' : ''}</span>
-                )}
-              </div>
-              {conv && conv.unreadCount > 0 && (
-                <span className={styles.unreadBadge}>{conv.unreadCount}</span>
-              )}
-            </div>
-          );
-        })}
+        {renderedDmList}
       </aside>
 
       {/* ── Main Chat Area ── */}
@@ -1216,13 +1286,12 @@ export default function ChatPage() {
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
-            <span>Messages</span>
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: 0 }}>
             {view === 'org' ? (
               <>
                 <div className={styles.chatHeaderIcon}>#</div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div className={styles.chatHeaderName}>Org Chat</div>
                   <div className={styles.chatHeaderSub}>{members.length + 1} members • Use @username or @all to mention</div>
                 </div>
@@ -1230,7 +1299,7 @@ export default function ChatPage() {
             ) : activeGroup ? (
               <>
                 <div className={styles.chatHeaderIcon}>👥</div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div className={styles.chatHeaderName}>{activeGroup.name}</div>
                   <div className={styles.chatHeaderSub}>
                     {activeGroup.participants.length} members • {activeGroup.otherParticipants?.map(p => p.name).join(', ')}
@@ -1246,7 +1315,7 @@ export default function ChatPage() {
                     getInitials(viewingMember?.name || '?')
                   )}
                 </div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div className={styles.chatHeaderName}>{viewingMember?.name || 'Direct Message'}</div>
                   <div className={styles.chatHeaderSub}>{viewingMember?.role?.replace('_', ' ')}</div>
                 </div>
@@ -1293,7 +1362,7 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {filteredMessages.map((msg, idx) => renderMessageRow(msg, idx, filteredMessages, false))}
+              {renderedMessageList}
 
               {/* TYPING INDICATOR ANIMATED ROW */}
               {(() => {
@@ -1380,7 +1449,7 @@ export default function ChatPage() {
              <textarea
               ref={inputRef}
               className={styles.chatInput}
-              placeholder={!socketConnected ? 'Reconnecting…' : view === 'org' ? 'Message #Org Chat — use @ to mention' : activeGroup ? `Message ${activeGroup.name}…` : `Message ${viewingMember?.name?.split(' ')[0] || ''}…`}
+              placeholder={!socketConnected ? 'Reconnecting…' : 'Message…'}
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -1418,16 +1487,14 @@ export default function ChatPage() {
           
           <div className={styles.threadContent}>
             <div className={styles.threadParentContainer}>
-              {renderMessageRow(activeThread.parent, 0, [activeThread.parent], true)}
+              {renderedThreadParent}
             </div>
             
             <div className={styles.threadRepliesTitle}>
               {activeThread.replies.length} {activeThread.replies.length === 1 ? 'reply' : 'replies'}
             </div>
             
-            {activeThread.replies.map((msg, idx) => 
-              renderMessageRow(msg, idx, activeThread.replies, true)
-            )}
+            {renderedThreadReplies}
             <div ref={threadBottomRef} />
           </div>
 

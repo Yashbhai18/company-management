@@ -357,6 +357,7 @@
 }
 .salaryInput[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .salaryInput:focus {
@@ -439,10 +440,10 @@
   border-radius: 14px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
   z-index: 200;
-  max-height: 280px;
-  overflow-y: auto;
   padding: 0.5rem;
   animation: slideDown 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 .employeeDropdownItem {
@@ -490,4 +491,45 @@
 .dropItemEmail {
   color: var(--text-muted);
   font-size: 0.75rem;
+}
+
+.dropdownSearchWrapper {
+  padding: 0.25rem 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.4rem;
+}
+
+.dropdownSearchInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  background: #f8fafc;
+  color: var(--text-color);
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+
+.dropdownSearchInput:focus {
+  background: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+}
+
+.dropdownItemsList {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.noEmployeesFound {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
 }

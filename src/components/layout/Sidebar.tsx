@@ -3,6 +3,7 @@ import React from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '../../lib/api';
+import { useSocket } from '../../hooks/useSocket';
 import styles from './sidebar.module.css';
 
 export default function Sidebar() {
@@ -12,6 +13,14 @@ export default function Sidebar() {
   const [org, setOrg] = React.useState<any>(null);
   const [dmUnread, setDmUnread] = React.useState(0);
   const [isOpenMobile, setIsOpenMobile] = React.useState(false);
+  const socket = useSocket();
+
+  const fetchUnreadCount = React.useCallback(() => {
+    api.get('/chat/conversations').then(res => {
+      const total = (res.data as any[]).reduce((acc: number, c: any) => acc + (c.unreadCount || 0), 0);
+      setDmUnread(total);
+    }).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     const handleToggle = () => setIsOpenMobile(prev => !prev);
@@ -48,12 +57,22 @@ export default function Sidebar() {
     }).catch(err => {
       console.error('Failed to load user', err);
     });
-    // Fetch unread DM count
-    api.get('/chat/conversations').then(res => {
-      const total = (res.data as any[]).reduce((acc: number, c: any) => acc + (c.unreadCount || 0), 0);
-      setDmUnread(total);
-    }).catch(() => {});
-  }, []);
+    
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
+
+  React.useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => {
+      fetchUnreadCount();
+    };
+    socket.on('chat:dm_message', handleUpdate);
+    socket.on('notification:new', handleUpdate);
+    return () => {
+      socket.off('chat:dm_message', handleUpdate);
+      socket.off('notification:new', handleUpdate);
+    };
+  }, [socket, fetchUnreadCount]);
 
   const handleLogout = async () => {
     try {
@@ -88,8 +107,7 @@ export default function Sidebar() {
 
   const adminItems = [
     { label: 'Locations', path: '/locations', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z' },
-    { label: 'Security', path: '/security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-    { label: 'Audit Logs', path: '/security?view=audit-logs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2' }
+    { label: 'Security', path: '/security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' }
   ];
 
   const renderNavItems = (items: typeof workforceItems) => {

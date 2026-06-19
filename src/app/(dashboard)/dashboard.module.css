@@ -35,12 +35,14 @@
 @media (max-width: 1024px) {
   .mainContent {
     padding: 1.5rem;
+    padding-bottom: 84px;
   }
 }
 
 @media (max-width: 640px) {
   .mainContent {
     padding: 1rem;
+    padding-bottom: 84px;
   }
 }
 

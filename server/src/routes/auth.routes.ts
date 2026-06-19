@@ -9,15 +9,15 @@ const router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: NODE_ENV === 'production' ? 5 : 100, // Relaxed limit for local development
-  message: { message: 'Too many requests, please try again later.' }, // JSON response for frontend
+  max: 5,
+  message: { message: 'Too many login attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false
 });
 
 const mfaLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: NODE_ENV === 'production' ? 5 : 50,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   message: { message: 'Too many 2FA verification attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false

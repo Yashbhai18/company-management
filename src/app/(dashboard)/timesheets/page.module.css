@@ -1020,9 +1020,72 @@
   font-size: 0.95rem;
 }
 
+.fullDayName {
+  display: inline;
+}
+
+.shortDayName {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .calendarGrid {
     grid-template-columns: repeat(7, minmax(100px, 1fr));
     overflow-x: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendarContainer {
+    padding: 0.75rem;
+  }
+  .calendarGrid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.35rem;
+    overflow-x: visible;
+  }
+  .calendarHeaderCell {
+    padding: 0.4rem 0.1rem;
+    font-size: 0.7rem;
+  }
+  .fullDayName {
+    display: none;
+  }
+  .shortDayName {
+    display: inline;
+  }
+  .calendarDayCell {
+    min-height: 55px;
+    padding: 0.4rem;
+    gap: 0.25rem;
+    align-items: center;
+    justify-content: center;
+  }
+  .dayCellHeader {
+    width: 100%;
+    justify-content: center;
+    position: relative;
+  }
+  .dayNumber {
+    font-size: 0.9rem;
+  }
+  .cellEntriesWrapper {
+    display: none;
+  }
+  .cellCountBadge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 0.6rem;
+    padding: 0.05rem 0.25rem;
+    min-width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 }

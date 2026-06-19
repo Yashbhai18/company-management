@@ -1,6 +1,8 @@
 import React from 'react';
 import Sidebar from '../../components/layout/Sidebar';
 import Header from '../../components/layout/Header';
+import MobileDock from '../../components/layout/MobileDock';
+import ClockInOutButton from '../../components/layout/ClockInOutButton';
 import styles from './dashboard.module.css';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +16,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className={styles.mainContent}>
           {children}
         </main>
+        <React.Suspense fallback={null}>
+          <MobileDock />
+        </React.Suspense>
+        {/* Mobile floating Clock In/Out button */}
+        <React.Suspense fallback={null}>
+          <ClockInOutButton variant="floating" />
+        </React.Suspense>
       </div>
     </div>
   );

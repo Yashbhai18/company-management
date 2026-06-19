@@ -6,7 +6,7 @@ import { useDialog } from '../ui/DialogProvider';
 import { useSocket } from '../../hooks/useSocket';
 import { SessionTimeoutModal } from './SessionTimeoutModal';
 
-export default function ClockInOutButton() {
+export default function ClockInOutButton({ variant = 'default' }: { variant?: 'default' | 'floating' }) {
   const { alert, confirm } = useDialog();
   const socket = useSocket();
   const [user, setUser] = React.useState<any>(null);
@@ -93,6 +93,16 @@ export default function ClockInOutButton() {
       socket.off('attendance:auto_clocked_out', handleAutoClockOut);
     };
   }, [socket, fetchShiftStatus]);
+
+  // Listen to global-shift-status-changed event to sync state immediately across instances
+  React.useEffect(() => {
+    const handleEventSync = () => {
+      console.info('[attendance] Synchronizing shift status via global event.');
+      fetchShiftStatus();
+    };
+    window.addEventListener('global-shift-status-changed', handleEventSync);
+    return () => window.removeEventListener('global-shift-status-changed', handleEventSync);
+  }, [fetchShiftStatus]);
 
   // Background synchronization loop: ensure correct global state every 30s
   React.useEffect(() => {
@@ -208,6 +218,52 @@ export default function ClockInOutButton() {
 
   // Restrict rendering strictly to personnel level employees
   if (!user || user.role !== 'employee') return null;
+
+  if (variant === 'floating') {
+    return (
+      <>
+        {/* Session timeout warning modal */}
+        {sessionWarning && (
+          <SessionTimeoutModal
+            payload={sessionWarning}
+            onAlive={handleSessionAlive}
+            onClockOut={handleSessionClockOut}
+          />
+        )}
+
+        <div className={styles.floatingWrapper}>
+          {activeShift && activeShift.clockIn && (
+            <div className={styles.floatingStopwatch}>
+              <span className={styles.stopwatchDot}></span>
+              <span className={styles.floatingStopwatchText || styles.stopwatchText}>
+                {(() => {
+                  const inTime = new Date(activeShift.clockIn).getTime();
+                  const nowTime = tickerTime.getTime();
+                  const elapsedSecs = Math.max(0, Math.floor((nowTime - inTime) / 1000));
+                  const hrs = Math.floor(elapsedSecs / 3600);
+                  const mins = Math.floor((elapsedSecs % 3600) / 60);
+                  const secs = elapsedSecs % 60;
+                  const pad = (n: number) => n.toString().padStart(2, '0');
+                  return hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+                })()}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={toggleShift}
+            disabled={isProcessing}
+            className={activeShift ? styles.floatingClockOutBtn : styles.floatingClockBtn}
+            title={activeShift ? 'Clock Out' : 'Clock In'}
+            aria-label={activeShift ? 'Clock Out' : 'Clock In'}
+          >
+            <svg className={styles.floatingIcon} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </button>
+        </div>
+      </>
+    );
+  }
 
   const renderStopwatch = () => {
     if (!activeShift || !activeShift.clockIn) {

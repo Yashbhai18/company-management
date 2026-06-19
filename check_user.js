@@ -1,5 +1,6 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
-const uri = 'mongodb://ThinkX:11006618@ac-oegcwrk-shard-00-01.ytwfy5a.mongodb.net:27017/jibble_clone?ssl=true&authSource=admin&directConnection=true';
+const uri = process.env.MONGODB_URI;
 
 const UserSchema = new mongoose.Schema({
   email: String,

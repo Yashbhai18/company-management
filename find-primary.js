@@ -1,4 +1,9 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
+
+const uri = process.env.MONGODB_URI || '';
+const credentialsMatch = uri.match(/mongodb:\/\/(.*?@)/);
+const credentials = credentialsMatch ? credentialsMatch[1] : '';
 
 const hosts = [
   'ac-oegcwrk-shard-00-00.ytwfy5a.mongodb.net',
@@ -9,9 +14,9 @@ const hosts = [
 async function findPrimary() {
   for (const host of hosts) {
     try {
-      const uri = `mongodb://ThinkX:11006618@${host}:27017/jibble_clone?ssl=true&authSource=admin&directConnection=true`;
+      const singleUri = `mongodb://${credentials}${host}:27017/jibble_clone?ssl=true&authSource=admin&directConnection=true`;
       console.log(`Connecting to ${host}...`);
-      const conn = await mongoose.createConnection(uri).asPromise();
+      const conn = await mongoose.createConnection(singleUri).asPromise();
       const adminDb = conn.db.admin();
       const info = await adminDb.command({ hello: 1 });
       if (info.isWritablePrimary) {

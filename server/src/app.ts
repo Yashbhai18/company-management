@@ -2,6 +2,8 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
+import { sanitizeMiddleware } from './middleware/sanitize';
 import authRoutes from './routes/auth.routes';
 import timesheetRoutes from './routes/timesheet.routes';
 import userRoutes from './routes/user.routes';
@@ -30,6 +32,18 @@ export const createApp = () => {
       credentials: true,
     })
   );
+
+  const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: NODE_ENV === 'production' ? 1000 : 10000, // 1000 requests in production, 10000 in development
+    message: { message: 'Too many requests from this IP, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use(globalLimiter);
+
+  app.use(sanitizeMiddleware);
 
   app.use('/api/auth', authRoutes);
   app.use('/api/timesheets', timesheetRoutes);

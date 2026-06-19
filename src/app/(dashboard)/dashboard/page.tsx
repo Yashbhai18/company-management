@@ -217,7 +217,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <span className={`${styles.taskBadge} ${styles['status_' + task.status]}`}>
-                          {task.status.replace('_', ' ')}
+                          {(task.status || '').replace('_', ' ')}
                         </span>
                       </div>
                     );
@@ -295,7 +295,7 @@ export default function DashboardPage() {
                   return (
                     <div key={req._id} className={styles.dashboardLeaveCard}>
                       <div className={styles.leaveHeader}>
-                        <span className={styles.leaveType}>{req.type.replace('_', ' ')}</span>
+                        <span className={styles.leaveType}>{(req.type || '').replace('_', ' ')}</span>
                         <span className={`${styles.statusBadge} ${styles['status_' + req.status]}`}>
                           {req.status}
                         </span>
