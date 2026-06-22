@@ -13,7 +13,7 @@ export const useAuth = () => {
     setState((s) => ({ ...s, isLoading: true }));
     try {
       const res = await api.post('/auth/login', { identifier, password, rememberMe, targetRole, orgSlug });
-      if (res.data.requires2fa) {
+      if (res.data.requires2fa || res.data.requiresPasswordReset) {
         setState((s) => ({ ...s, isLoading: false }));
         return res.data;
       }

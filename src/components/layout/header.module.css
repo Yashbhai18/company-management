@@ -551,9 +551,15 @@
   animation: scaleUp 0.15s ease-out;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .searchOverlay {
-    width: calc(100vw - 3rem);
+    position: fixed;
+    top: 64px;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-height: calc(100vh - 80px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 }
 

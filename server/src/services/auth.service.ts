@@ -8,10 +8,11 @@ import { generateAccessToken, TokenPayload, generateTemp2faToken } from '../util
 import { generateRefreshToken, hashToken } from '../utils/hash';
 import mongoose from 'mongoose';
 import { addMinutes, addDays } from 'date-fns';
-import { sendInviteEmail, sendMagicLinkEmail, sendWelcomeEmail, sendLoginAlertEmail } from './email.service';
+import { sendInviteEmail, sendMagicLinkEmail, sendWelcomeEmail, sendLoginAlertEmail, sendForgotPasswordOtpEmail } from './email.service';
 import { v4 as uuidv4 } from 'uuid';
 import { notificationService } from './notification.service';
 import { CLIENT_URL } from '../config/env';
+import { validatePassword } from '../utils/password';
 
 /** Business logic for auth operations */
 export const authService = {
@@ -24,6 +25,9 @@ export const authService = {
     phone?: string;
     password: string;
   }) => {
+    const pwdErr = validatePassword(params.password);
+    if (pwdErr) throw new Error(pwdErr);
+
     // Removed explicit global duplicate check to allow 1 email to map to multiple distinct organizations.
     // The Organization model ensures 'slug' is globally unique, effectively siloing these identities.
 
@@ -145,6 +149,9 @@ export const authService = {
     phone?: string;
     password: string;
   }) => {
+    const pwdErr = validatePassword(params.password);
+    if (pwdErr) throw new Error(pwdErr);
+
     if (params.email) {
       const existing = await User.findOne({ email: params.email.toLowerCase() });
       if (existing) {
@@ -479,7 +486,22 @@ export const authService = {
     const ok = await user.comparePassword!(params.password);
     if (!ok) throw new Error('Invalid credentials');
 
-        if (user.twoFactorEnabled && (user.role === 'admin' || user.role === 'super_admin')) {
+    if (user.mustChangePassword && user.email) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiry = addMinutes(new Date(), 10);
+      await User.updateMany(
+        { email: user.email.toLowerCase() },
+        { $set: { resetPasswordOtp: otp, resetPasswordOtpExpiry: expiry } }
+      );
+      await sendForgotPasswordOtpEmail(user.email, user.name, otp);
+      return {
+        requiresPasswordReset: true,
+        email: user.email,
+        message: 'For security reasons, you must change your password. An OTP has been sent to your email.'
+      };
+    }
+
+    if (user.twoFactorEnabled && (user.role === 'admin' || user.role === 'super_admin')) {
       const { Pending2faSession } = await import('../models/Pending2faSession');
       
       // Expire temp session in 5 minutes
@@ -530,6 +552,68 @@ export const authService = {
     const link = `${cleanBaseUrl}/login/verify?token=${raw}`;
     await sendMagicLinkEmail(user.email!, user.name, link);
   },
+
+  /** Request password reset OTP */
+  requestForgotPasswordOtp: async (email: string) => {
+    const cleanEmail = email.toLowerCase().trim();
+    const users = await User.find({ email: cleanEmail });
+    if (!users.length) {
+      throw new Error('No account found with this email address.');
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = addMinutes(new Date(), 10);
+
+    // Save OTP to all user profiles associated with this email
+    await User.updateMany(
+      { email: cleanEmail },
+      { $set: { resetPasswordOtp: otp, resetPasswordOtpExpiry: expiry } }
+    );
+
+    // Send the email using the first matching user's name
+    const primaryUser = users[0];
+    await sendForgotPasswordOtpEmail(cleanEmail, primaryUser.name, otp);
+  },
+
+  /** Reset password using email OTP */
+  resetPasswordWithOtp: async (email: string, otp: string, password: string) => {
+    const cleanEmail = email.toLowerCase().trim();
+    const pwdErr = validatePassword(password);
+    if (pwdErr) throw new Error(pwdErr);
+
+    const users = await User.find({ email: cleanEmail });
+    if (!users.length) {
+      throw new Error('No account found with this email address.');
+    }
+
+    // Verify OTP against the first user profile
+    const primaryUser = users[0];
+    if (!primaryUser.resetPasswordOtp || primaryUser.resetPasswordOtp !== otp) {
+      throw new Error('Invalid verification code.');
+    }
+
+    if (!primaryUser.resetPasswordOtpExpiry || primaryUser.resetPasswordOtpExpiry < new Date()) {
+      throw new Error('Verification code has expired. Please request a new one.');
+    }
+
+    // Hash the password once
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Update password, clear OTP, and clear mustChangePassword for all matching profiles
+    await User.updateMany(
+      { email: cleanEmail },
+      {
+        $set: {
+          passwordHash: hashedPassword,
+          mustChangePassword: false,
+          resetPasswordOtp: null,
+          resetPasswordOtpExpiry: null
+        }
+      }
+    );
+  },
+
 
   /** Verify magic link raw token; set used and return access + refresh tokens */
   verifyMagicLink: async (rawToken: string) => {
@@ -617,6 +701,9 @@ export const authService = {
 
   /** Complete invite: set profile identities, set password, activate user, clear token, return tokens */
   completeInvite: async (rawToken: string, password: string, username: string, countryCode: string, phone: string) => {
+    const pwdErr = validatePassword(password);
+    if (pwdErr) throw new Error(pwdErr);
+
     const user = await User.findOne({ inviteToken: rawToken });
     if (!user) throw new Error('Invalid invite token');
     if (!user.inviteExpiry || user.inviteExpiry < new Date()) throw new Error('Invite expired');

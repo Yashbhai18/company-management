@@ -107,6 +107,13 @@ export const login = async (req: Request, res: Response) => {
     if (result.requires2fa) {
       return res.json({ requires2fa: true, tempToken: result.tempToken });
     }
+    if ((result as any).requiresPasswordReset) {
+      return res.json({ 
+        requiresPasswordReset: true, 
+        email: (result as any).email, 
+        message: (result as any).message 
+      });
+    }
     res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
@@ -137,6 +144,34 @@ export const verifyMagic = async (req: Request, res: Response) => {
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Invalid token' });
+  }
+};
+
+/** Request OTP for forgot password */
+export const forgotPassword = async (req: Request, res: Response) => {
+  const schema = z.object({ email: z.string().email() });
+  try {
+    const { email } = schema.parse(req.body);
+    await authService.requestForgotPasswordOtp(email);
+    return res.json({ message: 'A 6-digit verification code has been sent to your email.' });
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message || 'Failed to request code' });
+  }
+};
+
+/** Reset password with OTP */
+export const resetPassword = async (req: Request, res: Response) => {
+  const schema = z.object({
+    email: z.string().email(),
+    otp: z.string().min(6).max(6),
+    password: z.string().min(8)
+  });
+  try {
+    const { email, otp, password } = schema.parse(req.body);
+    await authService.resetPasswordWithOtp(email, otp, password);
+    return res.json({ message: 'Password has been successfully reset. You can now log in.' });
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message || 'Failed to reset password' });
   }
 };
 

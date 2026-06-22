@@ -42,8 +42,15 @@ function getNotifIcon(type: string) {
   return '🔔';
 }
 
-export default function NotificationDrawer() {
-  const [isOpen, setIsOpen] = React.useState(false);
+interface NotificationDrawerProps {
+  isOpen?: boolean;
+  setIsOpen?: (open: boolean) => void;
+}
+
+export default function NotificationDrawer({ isOpen: controlledIsOpen, setIsOpen: controlledSetIsOpen }: NotificationDrawerProps) {
+  const [localIsOpen, setLocalIsOpen] = React.useState(false);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : localIsOpen;
+  const setIsOpen = controlledSetIsOpen !== undefined ? controlledSetIsOpen : setLocalIsOpen;
   const [notifications, setNotifications] = React.useState<INotification[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
 

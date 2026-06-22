@@ -28,17 +28,18 @@ export default function QuickActions() {
   // Fetch identity context
   const fetchContext = React.useCallback(async () => {
     try {
-      const [uRes, oRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/auth/my-orgs')
-      ]);
+      const uRes = await api.get('/auth/me');
       setUser(uRes.data.user);
       setOrg(uRes.data.org);
-      setMyOrgs(oRes.data.orgs || []);
       localStorage.setItem('attendance:user', JSON.stringify(uRes.data.user));
       localStorage.setItem('attendance:org', JSON.stringify(uRes.data.org));
-    } catch (err) {
-      console.error('QuickActions load failed:', err);
+      
+      const oRes = await api.get('/auth/my-orgs');
+      setMyOrgs(oRes.data.orgs || []);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('QuickActions load failed:', err);
+      }
     }
   }, []);
 

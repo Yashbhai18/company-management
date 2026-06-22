@@ -334,13 +334,8 @@ export default function TasksPage() {
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [userRes, tasksRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/tasks')
-      ]);
-      
+      const userRes = await api.get('/auth/me');
       setMe(userRes.data.user);
-      setTasks(tasksRes.data);
 
       if (userRes.data.org && userRes.data.org.kanbanStages) {
         setStages(userRes.data.org.kanbanStages);
@@ -350,10 +345,12 @@ export default function TasksPage() {
       const isAdminUser = userRole === 'admin' || userRole === 'super_admin';
 
       if (isAdminUser) {
-        const [usersRes, teamsRes] = await Promise.all([
+        const [tasksRes, usersRes, teamsRes] = await Promise.all([
+          api.get('/tasks'),
           api.get('/users'),
           api.get('/teams')
         ]);
+        setTasks(tasksRes.data);
         const allUsers = usersRes.data.users || [];
         setMembers(allUsers.filter((u: any) => u.role !== 'super_admin'));
         setTeams(teamsRes.data);
@@ -364,12 +361,17 @@ export default function TasksPage() {
           setTeamMode('existing');
         }
       } else {
-        // Employees fetch their belonging teams securely from backend!
-        const teamsRes = await api.get('/teams');
+        const [tasksRes, teamsRes] = await Promise.all([
+          api.get('/tasks'),
+          api.get('/teams')
+        ]);
+        setTasks(tasksRes.data);
         setTeams(teamsRes.data);
       }
-    } catch (err) {
-      console.error('Failed to fetch dashboard contents', err);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('Failed to fetch dashboard contents', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -384,8 +386,10 @@ export default function TasksPage() {
       const res = await api.get('/tasks');
       // Updates local tasks silently without triggering the fullscreen skeleton loading states!
       setTasks(res.data);
-    } catch (err) {
-      console.error('Silent refresh failed', err);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('Silent refresh failed', err);
+      }
     }
   }, []);
 

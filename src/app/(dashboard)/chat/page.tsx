@@ -168,6 +168,23 @@ export default function ChatPage() {
 
   const [mobileActiveView, setMobileActiveView] = React.useState<'sidebar' | 'chat'>('sidebar');
 
+  // Refs to avoid stale closures in socket events
+  const meRef = React.useRef<any>(null);
+  const activeConvIdRef = React.useRef<string | null>(null);
+  const viewRef = React.useRef<string>('org');
+
+  React.useEffect(() => {
+    meRef.current = me;
+  }, [me]);
+
+  React.useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
+
+  React.useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
   // REFS for click-outside closing
   const emojiPanelRef = React.useRef<HTMLDivElement>(null);
   const threadEmojiPanelRef = React.useRef<HTMLDivElement>(null);
@@ -240,6 +257,22 @@ export default function ChatPage() {
       }
     }
   }, []);
+
+  // Dynamically toggle a body class on mobile viewports when an active chat conversation is open
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (mobileActiveView === 'chat') {
+        document.body.classList.add('chat-active-mobile');
+      } else {
+        document.body.classList.remove('chat-active-mobile');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('chat-active-mobile');
+      }
+    };
+  }, [mobileActiveView]);
 
   // Handle URL params (?view=org, ?dm=userId, ?conversation=conversationId)
   React.useEffect(() => {
@@ -348,7 +381,7 @@ export default function ChatPage() {
       }
 
       // Desktop notification for messages from others
-      if (me && msg.senderId !== me._id) {
+      if (meRef.current && msg.senderId !== meRef.current._id) {
         triggerDesktopNotification(
           msg.parentId ? `Org Chat Thread reply from ${msg.senderName}` : `Org Chat from ${msg.senderName}`,
           msg.content
@@ -414,7 +447,10 @@ export default function ChatPage() {
             : c
         )
       );
-      if (me && message.senderId !== me._id) {
+      if (activeConvIdRef.current === conversationId) {
+        socket?.emit('chat:mark_read', { conversationId });
+      }
+      if (meRef.current && message.senderId !== meRef.current._id) {
         triggerDesktopNotification(
           message.parentId ? `DM Thread reply from ${message.senderName}` : `DM from ${message.senderName}`,
           message.content

@@ -7,6 +7,21 @@ import { initChatGateway } from './gateway/chat.gateway';
 
 const start = async () => {
   await connectDB();
+
+  // Run migration to flag existing users to change their password
+  try {
+    const { User } = await import('./models/User');
+    const res = await User.updateMany(
+      { mustChangePassword: { $exists: false } },
+      { $set: { mustChangePassword: true } }
+    );
+    if (res.modifiedCount > 0) {
+      console.info(`Migrated ${res.modifiedCount} existing users to require a password reset.`);
+    }
+  } catch (err) {
+    console.error('Failed to run mustChangePassword migration:', err);
+  }
+
   const app = createApp();
 
   // Create HTTP server so Socket.IO can share the same port

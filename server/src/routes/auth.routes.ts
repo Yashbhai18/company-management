@@ -50,4 +50,15 @@ router.get('/my-join-requests', authenticate, ctrl.getUserJoinRequests);
 router.post('/resolve-join-request', authenticate, ctrl.resolveJoinRequest);
 router.get('/me', authenticate, ctrl.me);
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: 'Too many password reset requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+router.post('/forgot-password', forgotPasswordLimiter, ctrl.forgotPassword);
+router.post('/reset-password', forgotPasswordLimiter, ctrl.resetPassword);
+
 export default router;

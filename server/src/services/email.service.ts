@@ -90,3 +90,13 @@ export const sendLoginAlertEmail = async (to: string, name: string, ipAddress?: 
 <p>If this was not you, please secure your account immediately.</p>`;
   await sendEmailViaBrevo(to, name, subject, html);
 };
+
+/** Send forgot password OTP verification email */
+export const sendForgotPasswordOtpEmail = async (to: string, name: string, otp: string) => {
+  const subject = `Your password reset verification code`;
+  const html = `<p>Hi ${name},</p>
+<p>You requested a password reset. Your verification code is: <strong style="font-size: 18px; letter-spacing: 2px; color: #4f46e5;">${otp}</strong></p>
+<p>This code is valid for 10 minutes. If you did not request this, you can ignore this email.</p>`;
+  await sendEmailViaBrevo(to, name, subject, html);
+};
+

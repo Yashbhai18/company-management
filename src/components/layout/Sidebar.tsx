@@ -48,14 +48,15 @@ export default function Sidebar() {
       if (cachedOrg) setOrg(JSON.parse(cachedOrg));
     } catch {}
 
-    // Fetch the current user and org
     api.get('/auth/me').then(res => {
       setUser(res.data.user);
       setOrg(res.data.org);
       localStorage.setItem('attendance:user', JSON.stringify(res.data.user));
       localStorage.setItem('attendance:org', JSON.stringify(res.data.org));
     }).catch(err => {
-      console.error('Failed to load user', err);
+      if (err.response?.status !== 401) {
+        console.error('Failed to load user', err);
+      }
     });
     
     fetchUnreadCount();
@@ -68,9 +69,11 @@ export default function Sidebar() {
     };
     socket.on('chat:dm_message', handleUpdate);
     socket.on('notification:new', handleUpdate);
+    socket.on('chat:unread_count_updated', handleUpdate);
     return () => {
       socket.off('chat:dm_message', handleUpdate);
       socket.off('notification:new', handleUpdate);
+      socket.off('chat:unread_count_updated', handleUpdate);
     };
   }, [socket, fetchUnreadCount]);
 

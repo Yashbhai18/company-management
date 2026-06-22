@@ -117,6 +117,11 @@ export const getDmHistory = async (req: Request, res: Response) => {
       { $addToSet: { readBy: userId } }
     );
 
+    const io = (await import('../gateway/chat.gateway')).getSocketIO();
+    if (io) {
+      io.to(`user:${userId}`).emit('chat:unread_count_updated');
+    }
+
     const enriched = await attachThreadCounts(messages);
     return res.json({ conversationId: conversation._id, messages: enriched.reverse() });
   } catch (err: any) {
@@ -203,6 +208,11 @@ export const getConversationMessages = async (req: Request, res: Response) => {
       { conversationId, readBy: { $ne: new mongoose.Types.ObjectId(userId) } },
       { $addToSet: { readBy: userId } }
     );
+
+    const io = (await import('../gateway/chat.gateway')).getSocketIO();
+    if (io) {
+      io.to(`user:${userId}`).emit('chat:unread_count_updated');
+    }
 
     const enriched = await attachThreadCounts(messages);
     return res.json({ conversationId, messages: enriched.reverse() });

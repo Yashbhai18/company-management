@@ -125,20 +125,24 @@ export default function TimesheetsPage() {
     
     const fullUrl = url + '?' + params.toString();
 
-    Promise.all([
-      api.get(fullUrl),
-      api.get('/auth/me'),
-      members.length === 0 ? api.get('/users').catch(() => ({ data: { users: [] } })) : Promise.resolve(null)
-    ])
-      .then(([timesheetRes, userRes, memberRes]) => {
-        setEntries(timesheetRes.data.entries);
+    api.get('/auth/me')
+      .then(async (userRes) => {
         setCurrentUser(userRes.data.user);
+        
+        const [timesheetRes, memberRes] = await Promise.all([
+          api.get(fullUrl),
+          members.length === 0 ? api.get('/users').catch(() => ({ data: { users: [] } })) : Promise.resolve(null)
+        ]);
+
+        setEntries(timesheetRes.data.entries);
         if (memberRes) {
           setMembers(memberRes.data.users || []);
         }
       })
       .catch(err => {
-        console.error('Timesheet real-time sync failure:', err);
+        if (err.response?.status !== 401) {
+          console.error('Timesheet real-time sync failure:', err);
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -297,21 +301,31 @@ export default function TimesheetsPage() {
     };
 
     if (dayPickerMode === 'years') {
+      const today = new Date();
       return (
         <div className={styles.dayPickerDropdown}>
           <div className={styles.monthPickerHeader}>
             <button type="button" onClick={() => setDayPickerYear(y => y - 10)}>&lt;&lt;</button>
             <span>Select Year</span>
-            <button type="button" onClick={() => setDayPickerYear(y => y + 10)}>&gt;&gt;</button>
+            <button 
+              type="button" 
+              onClick={() => {
+                if (dayPickerYear + 10 - 5 <= today.getFullYear()) {
+                  setDayPickerYear(y => y + 10);
+                }
+              }}
+              style={{ opacity: dayPickerYear + 10 - 5 > today.getFullYear() ? 0.35 : 1, cursor: dayPickerYear + 10 - 5 > today.getFullYear() ? 'not-allowed' : 'pointer' }}
+            >&gt;&gt;</button>
           </div>
           <div className={styles.yearGrid}>
             {Array.from({ length: 12 }, (_, i) => {
               const y = dayPickerYear - 5 + i;
+              const isFutureYear = y > today.getFullYear();
               return (
                 <div 
                   key={y} 
-                  className={`${styles.monthGridItem} ${y === year ? styles.selectedMonthItem : ''}`}
-                  onClick={() => handleYearPick(y)}
+                  className={`${styles.monthGridItem} ${y === year ? styles.selectedMonthItem : ''} ${isFutureYear ? styles.disabledDay : ''}`}
+                  onClick={() => !isFutureYear && handleYearPick(y)}
                 >
                   {y}
                 </div>
@@ -323,6 +337,7 @@ export default function TimesheetsPage() {
     }
 
     if (dayPickerMode === 'months') {
+      const today = new Date();
       return (
         <div className={styles.dayPickerDropdown}>
           <div className={styles.monthPickerHeader}>
@@ -330,18 +345,31 @@ export default function TimesheetsPage() {
             <span className={styles.interactiveYear} onClick={() => { setDayPickerYear(year); setDayPickerMode('years'); }}>
               {year}
             </span>
-            <button type="button" onClick={() => { const d = new Date(viewDate); d.setFullYear(viewDate.getFullYear() + 1); setViewDate(d); }}>&gt;</button>
+            <button 
+              type="button" 
+              onClick={() => {
+                if (year + 1 <= today.getFullYear()) {
+                  const d = new Date(viewDate);
+                  d.setFullYear(viewDate.getFullYear() + 1);
+                  setViewDate(d);
+                }
+              }}
+              style={{ opacity: year + 1 > today.getFullYear() ? 0.35 : 1, cursor: year + 1 > today.getFullYear() ? 'not-allowed' : 'pointer' }}
+            >&gt;</button>
           </div>
           <div className={styles.monthGrid}>
-            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-              <div 
-                key={m} 
-                className={`${styles.monthGridItem} ${idx === month ? styles.selectedMonthItem : ''}`}
-                onClick={() => handleMonthPick(idx)}
-              >
-                {m}
-              </div>
-            ))}
+            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => {
+              const isFutureMonth = year > today.getFullYear() || (year === today.getFullYear() && idx > today.getMonth());
+              return (
+                <div 
+                  key={m} 
+                  className={`${styles.monthGridItem} ${idx === month ? styles.selectedMonthItem : ''} ${isFutureMonth ? styles.disabledDay : ''}`}
+                  onClick={() => !isFutureMonth && handleMonthPick(idx)}
+                >
+                  {m}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
@@ -355,6 +383,8 @@ export default function TimesheetsPage() {
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
     
     const monthName = viewDate.toLocaleString('default', { month: 'long' });
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
     return (
       <div className={styles.dayPickerDropdown}>
@@ -363,7 +393,16 @@ export default function TimesheetsPage() {
           <span className={styles.interactiveMonthYear} onClick={() => setDayPickerMode('months')}>
             {monthName} {year}
           </span>
-          <button type="button" onClick={() => handleMonthChange(1)}>&gt;</button>
+          <button 
+            type="button" 
+            onClick={() => {
+              const nextMonth = new Date(year, month + 1, 1);
+              if (nextMonth <= todayStart) {
+                handleMonthChange(1);
+              }
+            }}
+            style={{ opacity: new Date(year, month + 1, 1) > todayStart ? 0.35 : 1, cursor: new Date(year, month + 1, 1) > todayStart ? 'not-allowed' : 'pointer' }}
+          >&gt;</button>
         </div>
         
         <div className={styles.dayGridLabels}>
@@ -376,11 +415,15 @@ export default function TimesheetsPage() {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const isSelected = selectedVal === dateStr;
             const isToday = new Date().toISOString().split('T')[0] === dateStr;
+            
+            const cellDate = new Date(year, month, d);
+            const isFutureDay = cellDate > todayStart;
+
             return (
               <div 
                 key={d} 
-                className={`${styles.dayGridItem} ${isSelected ? styles.selectedDayItem : ''} ${isToday ? styles.todayItem : ''}`}
-                onClick={() => onSelect(dateStr)}
+                className={`${styles.dayGridItem} ${isSelected ? styles.selectedDayItem : ''} ${isToday ? styles.todayItem : ''} ${isFutureDay ? styles.disabledDay : ''}`}
+                onClick={() => !isFutureDay && onSelect(dateStr)}
               >
                 {d}
               </div>
@@ -530,6 +573,7 @@ export default function TimesheetsPage() {
                     setSelectedPeriod('all'); // Reset period if month is chosen
                   }}
                   placeholder="Pick Month"
+                  disableFuture={true}
                 />
               </div>
             </div>
@@ -696,25 +740,33 @@ export default function TimesheetsPage() {
             ))}
 
             {/* Calendar Days */}
-            {calendarDays.map((dayNum, idx) => {
-              if (dayNum === null) {
-                return <div key={`empty-${idx}`} className={styles.emptyCell}></div>;
-              }
+            {(() => {
+              const year = selectedMonth ? parseInt(selectedMonth.split('-')[0]) : new Date().getFullYear();
+              const month = selectedMonth ? parseInt(selectedMonth.split('-')[1]) - 1 : new Date().getMonth();
+              const today = new Date();
+              const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-              const dayEntries = getDayEntries(dayNum);
+              return calendarDays.map((dayNum, idx) => {
+                if (dayNum === null) {
+                  return <div key={`empty-${idx}`} className={styles.emptyCell}></div>;
+                }
 
-              return (
-                <div 
-                  key={`day-${dayNum}`}
-                  className={`${styles.calendarDayCell} ${isToday(dayNum) ? styles.todayCell : ''}`}
-                  onClick={() => handleDayClick(dayNum)}
-                >
-                  <div className={styles.dayCellHeader}>
-                    <span className={styles.dayNumber}>{dayNum}</span>
-                    {dayEntries.length > 0 && (
-                      <span className={styles.cellCountBadge}>{dayEntries.length}</span>
-                    )}
-                  </div>
+                const dayDate = new Date(year, month, dayNum);
+                const isFutureDay = dayDate > todayStart;
+                const dayEntries = getDayEntries(dayNum);
+
+                return (
+                  <div 
+                    key={`day-${dayNum}`}
+                    className={`${styles.calendarDayCell} ${isToday(dayNum) ? styles.todayCell : ''} ${isFutureDay ? styles.futureCell : ''}`}
+                    onClick={() => !isFutureDay && handleDayClick(dayNum)}
+                  >
+                    <div className={styles.dayCellHeader}>
+                      <span className={styles.dayNumber}>{dayNum}</span>
+                      {dayEntries.length > 0 && (
+                        <span className={styles.cellCountBadge}>{dayEntries.length}</span>
+                      )}
+                    </div>
 
                   <div className={styles.cellEntriesWrapper}>
                     {currentUser?.role === 'employee' ? (
@@ -758,7 +810,7 @@ export default function TimesheetsPage() {
                   </div>
                 </div>
               );
-            })}
+            })})()}
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import api from '../../lib/api';
 import styles from './header.module.css';
 import NotificationDrawer from './NotificationDrawer';
 import { useDialog } from '../ui/DialogProvider';
+import ClockInOutButton from './ClockInOutButton';
 
 export default function Header() {
   const { alert } = useDialog();
@@ -13,6 +14,7 @@ export default function Header() {
   const [myOrgs, setMyOrgs] = React.useState<any[]>([]);
   const [showWorkspaceMenu, setShowWorkspaceMenu] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
   const [searchVal, setSearchVal] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<any>({ tasks: [], messages: [], holidays: [], timeOff: [], people: [] });
   const [isSearching, setIsSearching] = React.useState(false);
@@ -52,17 +54,18 @@ export default function Header() {
 
   const fetchContext = React.useCallback(async () => {
     try {
-      const [uRes, oRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/auth/my-orgs')
-      ]);
+      const uRes = await api.get('/auth/me');
       setUser(uRes.data.user);
       setOrg(uRes.data.org);
-      setMyOrgs(oRes.data.orgs || []);
       localStorage.setItem('attendance:user', JSON.stringify(uRes.data.user));
       localStorage.setItem('attendance:org', JSON.stringify(uRes.data.org));
-    } catch (err) {
-      console.error('Header load failed:', err);
+      
+      const oRes = await api.get('/auth/my-orgs');
+      setMyOrgs(oRes.data.orgs || []);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('Header load failed:', err);
+      }
     }
   }, []);
 
@@ -83,6 +86,7 @@ export default function Header() {
     const handleOutsideClick = (e: MouseEvent) => {
       setShowWorkspaceMenu(false);
       setShowUserMenu(false);
+      setShowNotifications(false);
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowSearchOverlay(false);
       }
@@ -208,7 +212,7 @@ export default function Header() {
       </button>
 
       {/* Workspace Selector */}
-      <div className={styles.workspaceWrapper} onClick={(e) => { e.stopPropagation(); setShowWorkspaceMenu(!showWorkspaceMenu); setShowUserMenu(false); }}>
+      <div className={styles.workspaceWrapper} onClick={(e) => { e.stopPropagation(); setShowWorkspaceMenu(!showWorkspaceMenu); setShowUserMenu(false); setShowNotifications(false); }}>
         <div className={styles.workspaceLogo}>
           {org ? org.name.charAt(0) : '?'}
         </div>
@@ -441,13 +445,16 @@ export default function Header() {
           )}
         </div>
 
+        {/* Clock In / Clock Out Button */}
+        <ClockInOutButton />
+
         {/* Dynamic Global Notification Drawer Component */}
         <div className={styles.alertsContainer}>
-          <NotificationDrawer />
+          <NotificationDrawer isOpen={showNotifications} setIsOpen={(val) => { setShowNotifications(val); if (val) { setShowUserMenu(false); setShowWorkspaceMenu(false); } }} />
         </div>
 
         {/* User Menu Trigger */}
-        <div className={styles.userMenuWrapper} onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); setShowWorkspaceMenu(false); }}>
+        <div className={styles.userMenuWrapper} onClick={(e) => { e.stopPropagation(); setShowUserMenu(!showUserMenu); setShowWorkspaceMenu(false); setShowNotifications(false); }}>
           <div className={styles.userAvatar}>
             {user && user.avatar ? (
               <img src={user.avatar} className={styles.avatarImg} alt="" />

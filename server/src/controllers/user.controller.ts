@@ -342,6 +342,13 @@ export const updateMemberByAdmin = async (req: Request, res: Response) => {
       userToUpdate.baseSalary = parsedSalary;
     }
 
+    if (req.body.weekendSettings !== undefined) {
+      userToUpdate.weekendSettings = {
+        ...req.body.weekendSettings,
+        isConfigured: true
+      };
+    }
+
     await userToUpdate.save();
     return res.json({ success: true, user: userToUpdate });
   } catch (err: any) {

@@ -20,6 +20,12 @@ export interface IUser extends Document {
   rememberMe: boolean;
   lastLogin?: Date;
   baseSalary?: number;
+  weekendSettings?: {
+    type: 'default' | 'custom' | 'alternate-saturday';
+    customDays: number[];
+    alternateSaturdayType: 'even' | 'odd' | 'none';
+    isConfigured?: boolean;
+  };
   twoFactorEnabled: boolean;
   twoFactorSecret?: string | null;
   tempTwoFactorSecret?: string | null;
@@ -35,6 +41,9 @@ export interface IUser extends Document {
     deviceName: string;
     secret: string;
   } | null;
+  resetPasswordOtp?: string | null;
+  resetPasswordOtpExpiry?: Date | null;
+  mustChangePassword?: boolean;
   createdAt: Date;
   updatedAt: Date;
   comparePassword?: (candidate: string) => Promise<boolean>;
@@ -71,6 +80,20 @@ const UserSchema = new Schema<IUser>(
     rememberMe: { type: Boolean, default: false },
     lastLogin: { type: Date },
     baseSalary: { type: Number, default: 10000 },
+    weekendSettings: {
+      type: {
+        type: String,
+        enum: ['default', 'custom', 'alternate-saturday'],
+        default: 'default'
+      },
+      customDays: { type: [Number], default: [0, 6] },
+      alternateSaturdayType: {
+        type: String,
+        enum: ['even', 'odd', 'none'],
+        default: 'none'
+      },
+      isConfigured: { type: Boolean, default: false }
+    },
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecret: { type: String, default: null },
     tempTwoFactorSecret: { type: String, default: null },
@@ -93,7 +116,10 @@ const UserSchema = new Schema<IUser>(
         secret: { type: String }
       },
       default: null
-    }
+    },
+    resetPasswordOtp: { type: String, default: null },
+    resetPasswordOtpExpiry: { type: Date, default: null },
+    mustChangePassword: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

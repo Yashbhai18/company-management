@@ -24,6 +24,10 @@ export default function LoginPage() {
       if (result && result.requires2fa) {
         sessionStorage.setItem('temp2faToken', result.tempToken);
         window.location.href = '/login/verify-2fa';
+      } else if (result && result.requiresPasswordReset) {
+        sessionStorage.setItem('resetPasswordEmail', result.email);
+        sessionStorage.setItem('resetPasswordMessage', result.message);
+        window.location.href = '/forgot-password?forced=true';
       } else {
         window.location.href = '/dashboard';
       }
@@ -86,14 +90,20 @@ export default function LoginPage() {
           <div className={styles.inputGroup}>
             <div className={styles.labelRow}>
               <label className={styles.label}>Password</label>
-              <button 
-                type="button" 
-                onClick={() => { setMode('magic'); setErrorMsg(''); setSuccessMsg(''); }} 
-                className={styles.forgotLink}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              >
-                Sign in with Magic Link
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button 
+                  type="button" 
+                  onClick={() => { setMode('magic'); setErrorMsg(''); setSuccessMsg(''); }} 
+                  className={styles.forgotLink}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  Magic Link
+                </button>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', opacity: 0.5 }}>|</span>
+                <a href="/forgot-password" className={styles.forgotLink}>
+                  Forgot Password?
+                </a>
+              </div>
             </div>
             <div className={styles.passwordWrapper}>
               <input 

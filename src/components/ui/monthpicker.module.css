@@ -203,3 +203,9 @@
   color: var(--on-primary);
   background: var(--primary);
 }
+
+.disabledItem {
+  opacity: 0.35;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}

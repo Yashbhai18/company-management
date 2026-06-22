@@ -41,14 +41,15 @@ export default function ClockInOutButton({ variant = 'default' }: { variant?: 'd
 
   const fetchShiftStatus = React.useCallback(async () => {
     try {
-      const [uRes, sRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/timesheets/active')
-      ]);
+      const uRes = await api.get('/auth/me');
       setUser(uRes.data.user);
+      
+      const sRes = await api.get('/timesheets/active');
       setActiveShift(sRes.data.active);
-    } catch (err) {
-      console.error('ClockBtn status sync failed:', err);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('ClockBtn status sync failed:', err);
+      }
     }
   }, []);
 
@@ -218,6 +219,43 @@ export default function ClockInOutButton({ variant = 'default' }: { variant?: 'd
 
   // Restrict rendering strictly to personnel level employees
   if (!user || user.role !== 'employee') return null;
+
+  const isTodayExplicitlyAssignedWeekend = () => {
+    if (!user || !user.weekendSettings || !user.weekendSettings.isConfigured) return false;
+    const settings = user.weekendSettings;
+    const day = new Date();
+    const dayOfWeek = day.getDay();
+
+    if (settings.type === 'custom') {
+      const customDays = Array.isArray(settings.customDays) ? settings.customDays : [0, 6];
+      return customDays.includes(dayOfWeek);
+    }
+
+    if (settings.type === 'alternate-saturday') {
+      if (dayOfWeek === 0) return true; // Sunday is always off
+      if (dayOfWeek === 6) { // Saturday
+        const satNumber = Math.ceil(day.getDate() / 7);
+        if (settings.alternateSaturdayType === 'even') {
+          return satNumber === 2 || satNumber === 4;
+        }
+        if (settings.alternateSaturdayType === 'odd') {
+          return satNumber === 1 || satNumber === 3 || satNumber === 5;
+        }
+      }
+      return false;
+    }
+
+    if (settings.type === 'default') {
+      return dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+    }
+
+    return false;
+  };
+
+  // If today is a weekend holiday and they are clocked out, hide the Clock In button
+  if (!activeShift && isTodayExplicitlyAssignedWeekend()) {
+    return null;
+  }
 
   if (variant === 'floating') {
     return (

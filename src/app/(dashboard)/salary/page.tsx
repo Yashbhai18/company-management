@@ -26,6 +26,11 @@ type SalarySheet = {
     email: string;
     avatar?: string;
     role: string;
+    weekendSettings?: {
+      type: 'default' | 'custom' | 'alternate-saturday';
+      customDays: number[];
+      alternateSaturdayType: 'even' | 'odd' | 'none';
+    };
   };
   month: string;
   baseMonthlySalary: number;
@@ -134,6 +139,42 @@ function SalaryPageContent() {
   const [employeeDropdownOpen, setEmployeeDropdownOpen] = React.useState(false);
   const [employeeSearch, setEmployeeSearch] = React.useState('');
   const employeeDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Weekend Holidays management states
+  const [selectedUserForWeekend, setSelectedUserForWeekend] = React.useState<SalarySheet['employee'] | null>(null);
+  const [weekendType, setWeekendType] = React.useState<'default' | 'custom' | 'alternate-saturday'>('default');
+  const [weekendCustomDays, setWeekendCustomDays] = React.useState<number[]>([0, 6]);
+  const [alternateSatType, setAlternateSatType] = React.useState<'even' | 'odd' | 'none'>('none');
+  const [isSavingWeekend, setIsSavingWeekend] = React.useState(false);
+
+  const openWeekendHolidaysModal = (emp: SalarySheet['employee']) => {
+    setSelectedUserForWeekend(emp);
+    const settings = emp.weekendSettings || { type: 'default', customDays: [0, 6], alternateSaturdayType: 'none' };
+    setWeekendType(settings.type || 'default');
+    setWeekendCustomDays(Array.isArray(settings.customDays) ? settings.customDays : [0, 6]);
+    setAlternateSatType(settings.alternateSaturdayType || 'none');
+  };
+
+  const handleSaveWeekendSettings = async () => {
+    if (!selectedUserForWeekend) return;
+    setIsSavingWeekend(true);
+    try {
+      await api.patch(`/users/${selectedUserForWeekend._id}`, {
+        weekendSettings: {
+          type: weekendType,
+          customDays: weekendCustomDays,
+          alternateSaturdayType: alternateSatType,
+        }
+      });
+      await alert('Weekend holiday settings updated successfully!', 'Success');
+      setSelectedUserForWeekend(null);
+      setReloadTrigger(prev => prev + 1);
+    } catch (err: any) {
+      await alert(err.response?.data?.message || 'Failed to update weekend holidays.');
+    } finally {
+      setIsSavingWeekend(false);
+    }
+  };
 
   // Sync buffer input salary when sheet loads/changes
   React.useEffect(() => {
@@ -352,7 +393,16 @@ function SalaryPageContent() {
           <h1 className={styles.title}>Salary Sheet</h1>
           <p className={styles.subTitle}>Fixed base salary: 10,000 per month. Weekends are excluded from the daily rate. Shifts ≥ 7 hours count as a Full Day, otherwise they count as a Half Day (50% pay).</p>
         </div>
-        <div className={styles.actions}>
+        <div className={styles.actions} style={{ display: 'flex', gap: '0.75rem' }}>
+          {isAdminViewer && sheet && (
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onClick={() => openWeekendHolidaysModal(sheet.employee)}
+            >
+              Weekend Holidays
+            </button>
+          )}
           <button type="button" className={styles.primaryBtn} onClick={downloadCsv} disabled={!sheet || isDownloading}>
             {isDownloading ? 'Preparing CSV...' : 'Download CSV'}
           </button>
@@ -366,6 +416,7 @@ function SalaryPageContent() {
             <MonthPicker
               value={month}
               onChange={(val) => updateMonth(val)}
+              disableFuture={true}
             />
           </div>
 
@@ -531,6 +582,130 @@ function SalaryPageContent() {
           <div className={styles.emptyState}>No salary sheet loaded yet.</div>
         )}
       </div>
+
+      {/* WEEKEND HOLIDAYS CONFIGURATION MODAL */}
+      {selectedUserForWeekend && (
+        <div className={styles.modalBackdrop} onClick={() => setSelectedUserForWeekend(null)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <h2 className={styles.modalTitle} style={{ marginBottom: '1.5rem' }}>
+              Weekend Holidays for {selectedUserForWeekend.name}
+            </h2>
+            
+            <div className={styles.formGroup} style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontWeight: 650, marginBottom: '0.5rem', color: 'var(--text-color)' }}>
+                Weekend Configuration Type
+              </label>
+              <CustomSelect
+                value={weekendType}
+                onChange={(val) => {
+                  setWeekendType(val as any);
+                  if (val === 'default') {
+                    setWeekendCustomDays([0, 6]);
+                    setAlternateSatType('none');
+                  } else if (val === 'alternate-saturday') {
+                    setWeekendCustomDays([0]); // Sundays off
+                    setAlternateSatType('even'); // 2nd and 4th Saturday off by default
+                  }
+                }}
+                options={[
+                  { value: 'default', label: 'Default (Saturday & Sunday Off)' },
+                  { value: 'custom', label: 'Custom Days Off' },
+                  { value: 'alternate-saturday', label: 'Alternate Saturdays Off' },
+                ]}
+              />
+            </div>
+
+            {weekendType === 'custom' && (
+              <div className={styles.formGroup} style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontWeight: 650, marginBottom: '0.75rem', color: 'var(--text-color)' }}>
+                  Select Weekly Off Days
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  {[
+                    { value: 0, label: 'Sunday' },
+                    { value: 1, label: 'Monday' },
+                    { value: 2, label: 'Tuesday' },
+                    { value: 3, label: 'Wednesday' },
+                    { value: 4, label: 'Thursday' },
+                    { value: 5, label: 'Friday' },
+                    { value: 6, label: 'Saturday' },
+                  ].map((day) => {
+                    const checked = weekendCustomDays.includes(day.value);
+                    return (
+                      <label 
+                        key={day.value} 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '0.4rem', 
+                          background: checked ? 'rgba(255, 79, 0, 0.08)' : 'var(--canvas-soft)', 
+                          border: checked ? '1px solid var(--primary)' : '1px solid var(--border-color)', 
+                          padding: '0.5rem 0.75rem', 
+                          borderRadius: '8px', 
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          color: checked ? 'var(--primary)' : 'var(--text-color)',
+                          fontWeight: checked ? 600 : 500
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          style={{ accentColor: 'var(--primary)' }}
+                          onChange={() => {
+                            if (checked) {
+                              setWeekendCustomDays(weekendCustomDays.filter(d => d !== day.value));
+                            } else {
+                              setWeekendCustomDays([...weekendCustomDays, day.value]);
+                            }
+                          }}
+                        />
+                        {day.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {weekendType === 'alternate-saturday' && (
+              <div className={styles.formGroup} style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontWeight: 650, marginBottom: '0.5rem', color: 'var(--text-color)' }}>
+                  Alternate Saturday Mode (Sundays are always Off)
+                </label>
+                <CustomSelect
+                  value={alternateSatType}
+                  onChange={(val) => setAlternateSatType(val as any)}
+                  options={[
+                    { value: 'even', label: '2nd & 4th Saturday Off' },
+                    { value: 'odd', label: '1st, 3rd & 5th Saturday Off' },
+                  ]}
+                />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem' }}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={() => setSelectedUserForWeekend(null)}
+                style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.submitBtn}
+                onClick={handleSaveWeekendSettings}
+                disabled={isSavingWeekend}
+                style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}
+              >
+                {isSavingWeekend ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

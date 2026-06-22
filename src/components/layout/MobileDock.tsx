@@ -36,10 +36,12 @@ export default function MobileDock() {
 
     socket.on('chat:dm_message', handleUpdate);
     socket.on('notification:new', handleUpdate);
+    socket.on('chat:unread_count_updated', handleUpdate);
     
     return () => {
       socket.off('chat:dm_message', handleUpdate);
       socket.off('notification:new', handleUpdate);
+      socket.off('chat:unread_count_updated', handleUpdate);
     };
   }, [socket, fetchUnreadCount]);
 

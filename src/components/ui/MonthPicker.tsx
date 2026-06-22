@@ -6,6 +6,7 @@ interface MonthPickerProps {
   value: string; // Expecting YYYY-MM (e.g. "2026-06")
   onChange: (val: string) => void;
   placeholder?: string;
+  disableFuture?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -18,7 +19,7 @@ const MONTH_SHORT_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
-export default function MonthPicker({ value, onChange, placeholder = "Select Month" }: MonthPickerProps) {
+export default function MonthPicker({ value, onChange, placeholder = "Select Month", disableFuture = false }: MonthPickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const wrapperRef = React.useRef<HTMLDivElement>(null);
 
@@ -67,6 +68,14 @@ export default function MonthPicker({ value, onChange, placeholder = "Select Mon
   };
 
   const handleNextYear = () => {
+    const todayYear = new Date().getFullYear();
+    if (disableFuture) {
+      if (isYearView) {
+        if (pickerYearPage + 12 - 5 > todayYear) return;
+      } else {
+        if (viewYear >= todayYear) return;
+      }
+    }
     if (isYearView) {
       setPickerYearPage(p => p + 12);
     } else {
@@ -75,12 +84,19 @@ export default function MonthPicker({ value, onChange, placeholder = "Select Mon
   };
 
   const handleSelectMonth = (idx: number) => {
+    if (disableFuture) {
+      const today = new Date();
+      if (viewYear > today.getFullYear() || (viewYear === today.getFullYear() && idx > today.getMonth())) {
+        return;
+      }
+    }
     const monthVal = String(idx + 1).padStart(2, '0');
     onChange(`${viewYear}-${monthVal}`);
     setIsOpen(false);
   };
 
   const handleSelectYear = (y: number) => {
+    if (disableFuture && y > new Date().getFullYear()) return;
     setViewYear(y);
     setIsYearView(false);
   };
@@ -190,12 +206,14 @@ export default function MonthPicker({ value, onChange, placeholder = "Select Mon
             <div className={styles.grid}>
               {Array.from({ length: 12 }, (_, i) => {
                 const yearVal = pickerYearPage - 5 + i;
+                const isFutureYear = disableFuture && yearVal > new Date().getFullYear();
                 return (
                   <button
                     key={yearVal}
                     type="button"
-                    onClick={() => handleSelectYear(yearVal)}
-                    className={`${styles.gridItem} ${isYearSelected(yearVal) ? styles.selectedItem : ""}`}
+                    onClick={() => !isFutureYear && handleSelectYear(yearVal)}
+                    className={`${styles.gridItem} ${isYearSelected(yearVal) ? styles.selectedItem : ""} ${isFutureYear ? styles.disabledItem : ""}`}
+                    disabled={isFutureYear}
                   >
                     {yearVal}
                   </button>
@@ -204,20 +222,26 @@ export default function MonthPicker({ value, onChange, placeholder = "Select Mon
             </div>
           ) : (
             <div className={styles.grid}>
-              {MONTH_SHORT_NAMES.map((m, idx) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => handleSelectMonth(idx)}
-                  className={`
-                    ${styles.gridItem} 
-                    ${isMonthSelected(idx) ? styles.selectedItem : ""}
-                    ${isMonthToday(idx) ? styles.todayItem : ""}
-                  `}
-                >
-                  {m}
-                </button>
-              ))}
+              {MONTH_SHORT_NAMES.map((m, idx) => {
+                const today = new Date();
+                const isFutureMonth = disableFuture && (viewYear > today.getFullYear() || (viewYear === today.getFullYear() && idx > today.getMonth()));
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => !isFutureMonth && handleSelectMonth(idx)}
+                    className={`
+                      ${styles.gridItem} 
+                      ${isMonthSelected(idx) ? styles.selectedItem : ""}
+                      ${isMonthToday(idx) ? styles.todayItem : ""}
+                      ${isFutureMonth ? styles.disabledItem : ""}
+                    `}
+                    disabled={isFutureMonth}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
             </div>
           )}
 

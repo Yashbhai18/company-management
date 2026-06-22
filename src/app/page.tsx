@@ -21,8 +21,17 @@ export default function LandingPage() {
     setErrorMsg('');
     if (!choice) return;
     try {
-      await login(identifier, password, false, choice, orgSlug.trim() || undefined);
-      window.location.href = '/dashboard';
+      const result = await login(identifier, password, false, choice, orgSlug.trim() || undefined);
+      if (result && result.requires2fa) {
+        sessionStorage.setItem('temp2faToken', result.tempToken);
+        window.location.href = '/login/verify-2fa';
+      } else if (result && result.requiresPasswordReset) {
+        sessionStorage.setItem('resetPasswordEmail', result.email);
+        sessionStorage.setItem('resetPasswordMessage', result.message);
+        window.location.href = '/forgot-password?forced=true';
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Login failed. Please check your credentials.');
     }
@@ -99,7 +108,22 @@ export default function LandingPage() {
                 </div>
 
                 <div className={styles.inputGroup}>
-                  <label>Password</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label>Password</label>
+                    <a 
+                      href="/forgot-password" 
+                      style={{ 
+                        fontSize: '0.8rem', 
+                        color: 'var(--primary)', 
+                        textDecoration: 'none',
+                        fontWeight: '600'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                      onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
+                    >
+                      Forgot Password?
+                    </a>
+                  </div>
                   <div className={styles.passwordWrapper}>
                     <input 
                       type={showPassword ? 'text' : 'password'} 

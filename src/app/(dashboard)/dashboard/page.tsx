@@ -31,19 +31,20 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, [activeShift]);
 
-  // Centralized Data Fetcher stored in callback for continuous synchronization
   const fetchData = React.useCallback(async () => {
     try {
-      const [uResp, sResp, statResp, oResp, reqResp] = await Promise.all([
-        api.get('/auth/me'),
+      const uResp = await api.get('/auth/me');
+      const currentUser = uResp.data.user;
+      setUser(currentUser);
+      setOrg(uResp.data.org);
+
+      const [sResp, statResp, oResp, reqResp] = await Promise.all([
         api.get('/timesheets/active'),
         api.get('/users/stats'),
         api.get('/auth/my-orgs'),
         api.get('/auth/my-join-requests')
       ]);
-      const currentUser = uResp.data.user;
-      setUser(currentUser);
-      setOrg(uResp.data.org);
+
       setActiveShift(sResp.data.active);
       setStats(statResp.data);
       setMyOrgs(oResp.data.orgs || []);
@@ -58,8 +59,10 @@ export default function DashboardPage() {
       setTasks(tResp.data || []);
       setLeaveData(lResp.data || null);
       setRecentShifts(histResp.data?.entries || []);
-    } catch (err) {
-      console.error('Dashboard sync error:', err);
+    } catch (err: any) {
+      if (err.response?.status !== 401) {
+        console.error('Dashboard sync error:', err);
+      }
     } finally {
       setLoading(false);
     }

@@ -48,6 +48,12 @@
   gap: 0.75rem;
 }
 
+@media (max-width: 1024px) {
+  .wrapper {
+    display: none !important;
+  }
+}
+
 .stopwatchContainer {
   background: var(--container-bg);
   border: 1px solid var(--border-color);
@@ -141,6 +147,7 @@
   gap: 0.5rem;
   z-index: 995;
   animation: floatIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
 }
 
 @keyframes floatIn {
@@ -230,4 +237,9 @@
   .floatingWrapper {
     display: none !important;
   }
+}
+
+:global(.chat-active-mobile) .floatingWrapper {
+  /* Sit above the chat input row (~70px) + bottom nav bar (~88px) + extra breathing room */
+  bottom: calc(172px + env(safe-area-inset-bottom, 0px)) !important;
 }

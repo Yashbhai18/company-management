@@ -1,10 +1,44 @@
 import { Request, Response } from 'express';
-import { eachDayOfInterval, endOfMonth, format, isWeekend, startOfMonth } from 'date-fns';
+import { eachDayOfInterval, endOfMonth, format, startOfMonth } from 'date-fns';
 import { TimeEntry } from '../models/TimeEntry';
 import { User } from '../models/User';
 import { Organization } from '../models/Organization';
 import { getDistance } from '../utils/geo';
 import type { TokenPayload } from '../utils/token';
+
+const isEmployeeWeekend = (day: Date, settings?: any): boolean => {
+  if (!settings || !settings.isConfigured) {
+    return false;
+  }
+
+  if (settings.type === 'default') {
+    const dayOfWeek = day.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
+  }
+  
+  if (settings.type === 'custom') {
+    const dayOfWeek = day.getDay();
+    const customDays = Array.isArray(settings.customDays) ? settings.customDays : [0, 6];
+    return customDays.includes(dayOfWeek);
+  }
+  
+  if (settings.type === 'alternate-saturday') {
+    const dayOfWeek = day.getDay();
+    if (dayOfWeek === 0) return true; // Sunday is always off
+    if (dayOfWeek === 6) { // Saturday
+      const satNumber = Math.ceil(day.getDate() / 7);
+      if (settings.alternateSaturdayType === 'even') {
+        return satNumber === 2 || satNumber === 4;
+      }
+      if (settings.alternateSaturdayType === 'odd') {
+        return satNumber === 1 || satNumber === 3 || satNumber === 5;
+      }
+    }
+    return false;
+  }
+  
+  return false;
+};
 
 const BASE_MONTHLY_SALARY = 10000;
 
@@ -38,7 +72,17 @@ const escapeCsv = (value: unknown) => {
 const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, customSalary?: number) => {
   const { start, end, monthKey } = parseMonthRange(month);
 
-  const employee = await User.findOne({ _id: userId, orgId }).select('_id name email avatar role orgId baseSalary');
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Block future months completely
+  if (start > todayStart) {
+    const error = new Error('Salary sheets for future months cannot be generated.');
+    (error as any).status = 400;
+    throw error;
+  }
+
+  const employee = await User.findOne({ _id: userId, orgId }).select('_id name email avatar role orgId baseSalary weekendSettings');
   if (!employee) {
     const error = new Error('Employee not found in this organization');
     (error as any).status = 404;
@@ -47,20 +91,22 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
 
   const baseSalary = (customSalary !== undefined && !isNaN(customSalary) && customSalary >= 0) ? customSalary : (employee.baseSalary ?? BASE_MONTHLY_SALARY);
 
-  const [timeEntries, allDays] = await Promise.all([
-    TimeEntry.find({
-      userId: employee._id,
-      orgId,
-      clockIn: { $gte: start, $lte: end },
-      clockOut: { $exists: true },
-    }).sort({ clockIn: 1 }),
-    Promise.resolve(eachDayOfInterval({ start, end })),
-  ]);
-
-  const validWorkingDays = allDays.filter((day) => !isWeekend(day));
-  const validWorkingDayCount = validWorkingDays.length;
-  const dailyRateRaw = validWorkingDayCount > 0 ? baseSalary / validWorkingDayCount : 0;
+  // Generate all days in month for the rate calculations
+  const fullMonthDays = eachDayOfInterval({ start, end });
+  const validWorkingDaysInMonth = fullMonthDays.filter((day) => !isEmployeeWeekend(day, employee.weekendSettings));
+  const totalWorkingDaysInMonth = validWorkingDaysInMonth.length;
+  const dailyRateRaw = totalWorkingDaysInMonth > 0 ? baseSalary / totalWorkingDaysInMonth : 0;
   const dailyRate = Number(dailyRateRaw.toFixed(2));
+
+  // Truncate days to only include dates up to today
+  const allDays = fullMonthDays.filter(day => day <= todayStart);
+
+  const timeEntries = await TimeEntry.find({
+    userId: employee._id,
+    orgId,
+    clockIn: { $gte: start, $lte: end },
+    clockOut: { $exists: true },
+  }).sort({ clockIn: 1 });
 
   const entriesByDay = new Map<string, (typeof timeEntries)[number][]>();
   timeEntries.forEach((entry) => {
@@ -71,24 +117,22 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
     entriesByDay.get(dayKey)!.push(entry);
   });
 
+  // Map rows with attendanceStatus and isWorkingDay/isWeekend
   const rows = allDays.map((day) => {
     const dayKey = toDateKey(day);
-    const isWorkingDay = !isWeekend(day);
+    const isWorkingDay = !isEmployeeWeekend(day, employee.weekendSettings);
     
     const dayEntries = entriesByDay.get(dayKey) || [];
     const totalMinutes = dayEntries.reduce((sum, entry) => sum + (entry.durationMinutes || 0), 0);
     const hasValidAttendance = Boolean(isWorkingDay && dayEntries.length > 0);
     
     let attendanceStatus: 'full' | 'half' | 'absent' = 'absent';
-    let earned = 0;
     
     if (hasValidAttendance) {
       if (totalMinutes >= 420) { // 7 hours
         attendanceStatus = 'full';
-        earned = dailyRate;
       } else {
         attendanceStatus = 'half';
-        earned = Number((dailyRate / 2).toFixed(2));
       }
     }
 
@@ -104,8 +148,31 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
       attendanceStatus,
       clockIn: firstEntry?.clockIn ? firstEntry.clockIn.toISOString() : null,
       clockOut: lastEntry?.clockOut ? lastEntry.clockOut.toISOString() : null,
-      earned,
+      earned: 0, // Will calculate below
     };
+  });
+
+  // Calculate earned salaries using the Half-Day leave policy
+  let halfDaysSeen = 0;
+  rows.forEach((row) => {
+    if (!row.isWorkingDay) {
+      row.earned = 0;
+      return;
+    }
+    if (row.attendanceStatus === 'full') {
+      row.earned = dailyRate;
+    } else if (row.attendanceStatus === 'half') {
+      halfDaysSeen += 1;
+      if (halfDaysSeen <= 2) {
+        // First 2 half-days are free (no deduction, 100% pay)
+        row.earned = dailyRate;
+      } else {
+        // 3rd and subsequent half-days are deducted (50% pay)
+        row.earned = Number((dailyRate / 2).toFixed(2));
+      }
+    } else {
+      row.earned = 0;
+    }
   });
 
   const totalEarned = Number(rows.reduce((sum, row) => sum + row.earned, 0).toFixed(2));
@@ -117,12 +184,19 @@ const buildSalarySheet = async (userId: string, orgId: string, month?: unknown, 
       email: employee.email,
       avatar: employee.avatar,
       role: employee.role,
+      weekendSettings: employee.weekendSettings,
     },
     month: monthKey,
     baseMonthlySalary: baseSalary,
-    totalDaysInMonth: allDays.length,
-    totalValidWorkingDays: validWorkingDayCount,
-    payableDays: rows.reduce((sum, row) => sum + (row.attendanceStatus === 'full' ? 1 : row.attendanceStatus === 'half' ? 0.5 : 0), 0),
+    totalDaysInMonth: fullMonthDays.length,
+    totalValidWorkingDays: totalWorkingDaysInMonth,
+    payableDays: rows.reduce((sum, row) => {
+      if (row.attendanceStatus === 'full') return sum + 1;
+      if (row.attendanceStatus === 'half') {
+        return sum + (row.earned >= dailyRate ? 1 : 0.5);
+      }
+      return sum;
+    }, 0),
     dailyRate,
     totalSalary: totalEarned,
     rows,
@@ -180,6 +254,15 @@ export const clockIn = async (req: Request, res: Response) => {
     const openShift = await TimeEntry.findOne({ userId: user.userId, clockOut: { $exists: false } });
     if (openShift) {
       return res.status(400).json({ message: 'You are already clocked in' });
+    }
+
+    const employee = await User.findById(user.userId);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    if (isEmployeeWeekend(new Date(), employee.weekendSettings)) {
+      return res.status(400).json({ message: 'Today is a scheduled weekend holiday. Clock-in is disabled.' });
     }
 
     // Extra safety lock: Disallow super rapid multi-taps (within 5s)
@@ -270,24 +353,44 @@ export const getHistory = async (req: Request, res: Response) => {
       query.userId = targetUser;
     }
 
+    const now = new Date();
+
     if (month) {
       const date = new Date(String(month) + '-01');
       if (!isNaN(date.getTime())) {
         const y = date.getFullYear();
         const m = date.getMonth();
+        const startOfMonthDate = new Date(y, m, 1);
+        const endOfMonthDate = new Date(y, m + 1, 0, 23, 59, 59, 999);
+        
+        // Block future month query completely
+        if (startOfMonthDate > now) {
+          return res.status(400).json({ message: 'Timesheet records for future months cannot be accessed.' });
+        }
+
+        const effectiveEnd = endOfMonthDate > now ? now : endOfMonthDate;
         query.clockIn = {
-          $gte: new Date(y, m, 1),
-          $lte: new Date(y, m + 1, 0, 23, 59, 59, 999),
+          $gte: startOfMonthDate,
+          $lte: effectiveEnd,
         };
       }
     } else if (start || end) {
       query.clockIn = {};
-      if (start) query.clockIn.$gte = new Date(String(start));
-      if (end) {
-        const endD = new Date(String(end));
-        endD.setHours(23, 59, 59, 999);
-        query.clockIn.$lte = endD;
+      if (start) {
+        const startD = new Date(String(start));
+        if (startD > now) {
+          return res.status(400).json({ message: 'Future date records cannot be accessed.' });
+        }
+        query.clockIn.$gte = startD;
       }
+      
+      const endD = end ? new Date(String(end)) : new Date();
+      endD.setHours(23, 59, 59, 999);
+      const effectiveEnd = endD > now ? now : endD;
+      query.clockIn.$lte = effectiveEnd;
+    } else {
+      // By default, restrict to past and current dates only
+      query.clockIn = { $lte: now };
     }
 
     // Perform final find and conditionally populate user data so Admin can see names

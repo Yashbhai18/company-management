@@ -8,6 +8,13 @@ dotenv.config();
 const MONGO_URI = process.env.MONGODB_URI!;
 
 async function run() {
+  const password = process.argv[2];
+  if (!password) {
+    console.error('Error: Please specify the password to test as a command line argument.');
+    console.error('Example: ts-node test-pwd.ts MyPassword');
+    process.exit(1);
+  }
+
   await mongoose.connect(MONGO_URI);
   console.log('Connected to DB');
 
@@ -17,8 +24,8 @@ async function run() {
     process.exit(1);
   }
 
-  const check = await bcrypt.compare('Password123', u.passwordHash!);
-  console.log('plk@gmail.com + Password123 matches:', check);
+  const check = await bcrypt.compare(password, u.passwordHash!);
+  console.log(`plk@gmail.com + ${password} matches:`, check);
 
   await mongoose.disconnect();
 }

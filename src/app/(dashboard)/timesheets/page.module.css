@@ -1089,3 +1089,15 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
 }
+
+.futureCell {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.disabledDay {
+  opacity: 0.35;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+}

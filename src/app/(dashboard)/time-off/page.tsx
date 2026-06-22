@@ -72,7 +72,7 @@ export default function TimeOffPage() {
     setTimeout(() => {
       setShowRequestModal(false);
       setIsClosingRequestModal(false);
-    }, 250);
+    }, 300);
   };
 
   const closeDayModal = () => {
@@ -80,7 +80,7 @@ export default function TimeOffPage() {
     setTimeout(() => {
       setSelectedDayForModal(null);
       setIsClosingDayModal(false);
-    }, 250);
+    }, 300);
   };
 
   // Form State - Create Holiday (Admin)

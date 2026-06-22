@@ -518,6 +518,7 @@ export function initChatGateway(io: SocketIOServer) {
           { conversationId, readBy: { $ne: new mongoose.Types.ObjectId(socket.userId) } },
           { $addToSet: { readBy: socket.userId } }
         );
+        io.to(`user:${socket.userId}`).emit('chat:unread_count_updated');
       } catch (err) {
         console.error('[chat] mark read error', err);
       }
