@@ -22,6 +22,15 @@ html {
   --canvas:         #fffefb;
   --canvas-soft:    #f8f4f0;
 
+  /* Redesigned Zapier-inspired tokens */
+  --color-primary:    #ff4f00;
+  --color-on-primary: #fffefb;
+  --color-canvas:     #fffefb;
+  --color-canvas-soft:#f8f4f0;
+  --color-ink:        #201515;
+  --color-body:       #605d52;
+  --color-mute:       #c5c0b1;
+
   /* Semantic aliases (used throughout components) */
   --bg-color:       var(--canvas);
   --container-bg:   var(--canvas-soft);
@@ -47,10 +56,19 @@ html {
   --space-3xl: 48px;
   --space-4xl: 64px;
 
+  /* Spacing tokens */
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+
   /* Radius */
   --radius-sm:   6px;
   --radius-md:   12px;
   --radius-pill: 9999px;
+
+  /* Radius tokens */
+  --rounded-sm: 6px;
+  --rounded-md: 12px;
 }
 
 * {

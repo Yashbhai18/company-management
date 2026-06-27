@@ -8,6 +8,7 @@ import QuickActions from '../../../components/layout/QuickActions';
 import NotificationDrawer from '../../../components/layout/NotificationDrawer';
 import { useDialog } from '../../../components/ui/DialogProvider';
 import CustomSelect from '../../../components/ui/CustomSelect';
+import Icon from '../../../components/ui/Icon';
 
 interface UserRecord {
   _id: string;
@@ -619,7 +620,12 @@ export default function PeoplePage() {
                                           )}
                                         </div>
                                       ) : (
-                                        <span className={styles.detailValue}>{u.department || 'Unassigned'}</span>
+                                        <span className={styles.departmentBadge}>
+                                          <span className={styles.departmentIconContainer}>
+                                            <Icon name="people" size={20} />
+                                          </span>
+                                          <span className={styles.detailValue}>{u.department || 'Unassigned'}</span>
+                                        </span>
                                       )}
                                     </div>
                                     <div className={styles.detailItem}>

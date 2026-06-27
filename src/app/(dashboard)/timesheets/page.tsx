@@ -6,6 +6,7 @@ import QuickActions from '../../../components/layout/QuickActions';
 import NotificationDrawer from '../../../components/layout/NotificationDrawer';
 import ClockInOutButton from '../../../components/layout/ClockInOutButton';
 import MonthPicker from '../../../components/ui/MonthPicker';
+import BottomSheet from '../../../components/ui/BottomSheet';
 
 interface LogEntry {
   _id: string;
@@ -670,62 +671,115 @@ export default function TimesheetsPage() {
             <span>Start your shift on the Dashboard to begin tracking!</span>
           </div>
         ) : (
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  {currentUser?.role !== 'employee' && (
-                    <th onClick={() => handleSort('member')} className={styles.sortableHeader}>
-                      Member <SortIcon colKey="member" />
+          <>
+            {/* ── Desktop table ──────────────────────────────────── */}
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    {currentUser?.role !== 'employee' && (
+                      <th onClick={() => handleSort('member')} className={styles.sortableHeader}>
+                        Member <SortIcon colKey="member" />
+                      </th>
+                    )}
+                    <th onClick={() => handleSort('clockIn')} className={styles.sortableHeader}>
+                      Date <SortIcon colKey="clockIn" />
                     </th>
-                  )}
-                  <th onClick={() => handleSort('clockIn')} className={styles.sortableHeader}>
-                    Date <SortIcon colKey="clockIn" />
-                  </th>
-                  <th>Check In</th>
-                  <th>Check Out</th>
-                  <th onClick={() => handleSort('locationStatus')} className={styles.sortableHeader}>
-                    Location <SortIcon colKey="locationStatus" />
-                  </th>
-                  <th onClick={() => handleSort('durationMinutes')} className={styles.sortableHeader}>
-                    Calculated Duration <SortIcon colKey="durationMinutes" />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedEntries.map((e) => {
-                  const m: any = typeof e.userId === 'object' ? e.userId : null;
-                  return (
-                    <tr key={e._id}>
-                      {currentUser?.role !== 'employee' && (
-                        <td className={styles.memberCell}>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th onClick={() => handleSort('locationStatus')} className={styles.sortableHeader}>
+                      Location <SortIcon colKey="locationStatus" />
+                    </th>
+                    <th onClick={() => handleSort('durationMinutes')} className={styles.sortableHeader}>
+                      Calculated Duration <SortIcon colKey="durationMinutes" />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedEntries.map((e) => {
+                    const m: any = typeof e.userId === 'object' ? e.userId : null;
+                    return (
+                      <tr key={e._id}>
+                        {currentUser?.role !== 'employee' && (
+                          <td className={styles.memberCell}>
+                            <div className={styles.miniAvatar}>
+                              {m?.avatar ? <img src={m.avatar} className={styles.fullImgCover} alt="" /> : (m?.name?.charAt(0) || '?')}
+                            </div>
+                            <span className={styles.mNameText}>{m?.name || 'Unknown'}</span>
+                          </td>
+                        )}
+                        <td className={styles.primaryText}>{formatDate(e.clockIn)}</td>
+                        <td>{formatTime(e.clockIn)}</td>
+                        <td>
+                          {e.clockOut ? (
+                            formatTime(e.clockOut)
+                          ) : (
+                            <span className={styles.badge}>Active Now</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={e.locationStatus === 'on-site' ? styles.onsiteBadge : styles.wfhBadge}>
+                            {e.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
+                          </span>
+                        </td>
+                        <td className={styles.boldText}>{formatHours(e.durationMinutes)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Mobile card stack (hidden on desktop via CSS) ───── */}
+            <div className={styles.mobileCardList}>
+              {sortedEntries.map((e) => {
+                const m: any = typeof e.userId === 'object' ? e.userId : null;
+                return (
+                  <div key={e._id} className={styles.mobileCard}>
+                    {/* Card top: member + location badge */}
+                    <div className={styles.mobileCardTop}>
+                      {currentUser?.role !== 'employee' && m && (
+                        <div className={styles.mobileCardMember}>
                           <div className={styles.miniAvatar}>
                             {m?.avatar ? <img src={m.avatar} className={styles.fullImgCover} alt="" /> : (m?.name?.charAt(0) || '?')}
                           </div>
                           <span className={styles.mNameText}>{m?.name || 'Unknown'}</span>
-                        </td>
+                        </div>
                       )}
-                      <td className={styles.primaryText}>{formatDate(e.clockIn)}</td>
-                      <td>{formatTime(e.clockIn)}</td>
-                    <td>
-                      {e.clockOut ? (
-                        formatTime(e.clockOut)
-                      ) : (
-                        <span className={styles.badge}>Active Now</span>
-                      )}
-                    </td>
-                    <td>
                       <span className={e.locationStatus === 'on-site' ? styles.onsiteBadge : styles.wfhBadge}>
                         {e.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
                       </span>
-                    </td>
-                      <td className={styles.boldText}>{formatHours(e.durationMinutes)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+
+                    {/* Card date */}
+                    <div className={styles.mobileCardDate}>{formatDate(e.clockIn)}</div>
+
+                    {/* Card row: times + duration */}
+                    <div className={styles.mobileCardRow}>
+                      <div className={styles.mobileCardStat}>
+                        <span className={styles.mobileCardStatLabel}>Clock In</span>
+                        <span className={styles.mobileCardStatVal}>{formatTime(e.clockIn)}</span>
+                      </div>
+                      <div className={styles.mobileCardDivider} aria-hidden="true" />
+                      <div className={styles.mobileCardStat}>
+                        <span className={styles.mobileCardStatLabel}>Clock Out</span>
+                        <span className={styles.mobileCardStatVal}>
+                          {e.clockOut ? formatTime(e.clockOut) : (
+                            <span className={styles.badge}>Active Now</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className={styles.mobileCardDivider} aria-hidden="true" />
+                      <div className={styles.mobileCardStat}>
+                        <span className={styles.mobileCardStatLabel}>Duration</span>
+                        <span className={`${styles.mobileCardStatVal} ${styles.boldText}`}>{formatHours(e.durationMinutes)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )
       ) : (
         /* Calendar view container */
@@ -815,67 +869,62 @@ export default function TimesheetsPage() {
         </div>
       )}
 
-      {/* Day Details Modal */}
-      {selectedDayForModal && (
-        <div className={`${styles.modalOverlay} ${isClosingModal ? 'closingOverlay' : ''}`} onClick={closeModalWithAnim}>
-          <div className={`${styles.modalContent} ${isClosingModal ? 'closingContent' : ''}`} onClick={e => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>
-                Logs for {selectedDayForModal.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-              </h3>
-              <button type="button" className={styles.modalCloseBtn} onClick={closeModalWithAnim}>×</button>
-            </div>
-            
-            <div className={styles.modalBody}>
-              {(() => {
-                const dayNum = selectedDayForModal.getDate();
-                const dayEntries = getDayEntries(dayNum);
-                
-                if (dayEntries.length === 0) {
-                  return (
-                    <div className={styles.modalEmpty}>
-                      <p>No shifts logged on this day.</p>
-                    </div>
-                  );
-                }
-                
+      {/* Day Details — BottomSheet (mobile) / Side Panel (desktop) */}
+      <BottomSheet
+        isOpen={!!selectedDayForModal}
+        onClose={closeModalWithAnim}
+        title={
+          selectedDayForModal
+            ? `Logs for ${selectedDayForModal.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`
+            : ''
+        }
+      >
+        {selectedDayForModal && (() => {
+          const dayNum = selectedDayForModal.getDate();
+          const dayEntries = getDayEntries(dayNum);
+
+          if (dayEntries.length === 0) {
+            return (
+              <div className={styles.modalEmpty}>
+                <p>No shifts logged on this day.</p>
+              </div>
+            );
+          }
+
+          return (
+            <div className={styles.modalList}>
+              {dayEntries.map(e => {
+                const m: any = typeof e.userId === 'object' ? e.userId : null;
                 return (
-                  <div className={styles.modalList}>
-                    {dayEntries.map(e => {
-                      const m: any = typeof e.userId === 'object' ? e.userId : null;
-                      return (
-                        <div key={e._id} className={styles.modalRow}>
-                          {currentUser?.role !== 'employee' && (
-                            <div className={styles.modalMember}>
-                              <div className={styles.modalAvatar}>
-                                {m?.avatar ? <img src={m.avatar} alt="" /> : (m?.name?.charAt(0) || '?')}
-                              </div>
-                              <span className={styles.modalMemberName}>{m?.name || 'Unknown'}</span>
-                            </div>
-                          )}
-                          <div className={styles.modalShiftInfo}>
-                            <span className={styles.modalSubLabel}>Clock In / Out</span>
-                            <span className={styles.modalVal}>{formatTime(e.clockIn)} - {e.clockOut ? formatTime(e.clockOut) : 'Active Now'}</span>
-                          </div>
-                          <div className={styles.modalLocation}>
-                            <span className={e.locationStatus === 'on-site' ? styles.onsiteBadge : styles.wfhBadge}>
-                              {e.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
-                            </span>
-                          </div>
-                          <div className={styles.modalHours}>
-                            <span className={styles.modalSubLabel}>Duration</span>
-                            <span className={styles.modalDurationText}>{formatHours(e.durationMinutes)}</span>
-                          </div>
+                  <div key={e._id} className={styles.modalRow}>
+                    {currentUser?.role !== 'employee' && (
+                      <div className={styles.modalMember}>
+                        <div className={styles.modalAvatar}>
+                          {m?.avatar ? <img src={m.avatar} alt="" /> : (m?.name?.charAt(0) || '?')}
                         </div>
-                      );
-                    })}
+                        <span className={styles.modalMemberName}>{m?.name || 'Unknown'}</span>
+                      </div>
+                    )}
+                    <div className={styles.modalShiftInfo}>
+                      <span className={styles.modalSubLabel}>Clock In / Out</span>
+                      <span className={styles.modalVal}>{formatTime(e.clockIn)} – {e.clockOut ? formatTime(e.clockOut) : 'Active Now'}</span>
+                    </div>
+                    <div className={styles.modalLocation}>
+                      <span className={e.locationStatus === 'on-site' ? styles.onsiteBadge : styles.wfhBadge}>
+                        {e.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
+                      </span>
+                    </div>
+                    <div className={styles.modalHours}>
+                      <span className={styles.modalSubLabel}>Duration</span>
+                      <span className={styles.modalDurationText}>{formatHours(e.durationMinutes)}</span>
+                    </div>
                   </div>
                 );
-              })()}
+              })}
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
+      </BottomSheet>
     </div>
   );
 }

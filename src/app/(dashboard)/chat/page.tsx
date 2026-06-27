@@ -5,6 +5,7 @@ import api from '../../../lib/api';
 import { useSocket } from '../../../hooks/useSocket';
 import { getExistingSocket } from '../../../lib/socket';
 import styles from './chat.module.css';
+import Icon from '../../../components/ui/Icon';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface Member {
@@ -1334,7 +1335,9 @@ export default function ChatPage() {
               </>
             ) : activeGroup ? (
               <>
-                <div className={styles.chatHeaderIcon}>👥</div>
+                <div className={styles.chatHeaderIcon}>
+                  <Icon name="people" size={20} />
+                </div>
                 <div style={{ minWidth: 0 }}>
                   <div className={styles.chatHeaderName}>{activeGroup.name}</div>
                   <div className={styles.chatHeaderSub}>
