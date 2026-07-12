@@ -146,10 +146,40 @@ api.defaults.adapter = async (config) => {
   return requestPromise;
 };
 
-// Attach bearer token from memory
+function getOrCreateMacAddress() {
+  if (typeof window === 'undefined') return '';
+  let mac = localStorage.getItem('macAddress');
+  if (!mac) {
+    const hexDigits = '0123456789ABCDEF';
+    const macArr = [];
+    for (let i = 0; i < 6; i++) {
+      let digit1 = hexDigits[Math.floor(Math.random() * 16)];
+      let digit2 = hexDigits[Math.floor(Math.random() * 16)];
+      if (i === 0) {
+        const localUnicastDigits = '26AE';
+        digit2 = localUnicastDigits[Math.floor(Math.random() * 4)];
+      }
+      macArr.push(digit1 + digit2);
+    }
+    mac = macArr.join(':');
+    localStorage.setItem('macAddress', mac);
+  }
+  return mac;
+}
+
+// Attach bearer token from memory if not already set
 api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined' && config.headers) {
+    const mac = getOrCreateMacAddress();
+    if (mac) {
+      config.headers['X-Mac-Address'] = mac;
+    }
+  }
   if (accessToken && config.headers) {
-    config.headers['Authorization'] = `Bearer ${accessToken}`;
+    const hasAuth = config.headers['Authorization'] || config.headers['authorization'];
+    if (!hasAuth) {
+      config.headers['Authorization'] = `Bearer ${accessToken}`;
+    }
   }
   return config;
 });

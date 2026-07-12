@@ -11,6 +11,8 @@ export interface IUser extends Document {
   email?: string;
   phone?: string;
   countryCode?: string;
+  dob?: Date | null;
+  dateOfJoining?: Date | null;
   department?: string;
   avatar?: string;
   passwordHash?: string | null;
@@ -44,6 +46,19 @@ export interface IUser extends Document {
   resetPasswordOtp?: string | null;
   resetPasswordOtpExpiry?: Date | null;
   mustChangePassword?: boolean;
+  slack?: {
+    connected: boolean;
+    teamId?: string | null;
+    teamName?: string | null;
+    slackUserId?: string | null;
+    slackDisplayName?: string | null;
+    slackUsername?: string | null;
+    accessToken?: string | null;
+    refreshToken?: string | null;
+    expiresAt?: Date | null;
+    scopes?: string | null;
+    connectedAt?: Date | null;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
   comparePassword?: (candidate: string) => Promise<boolean>;
@@ -60,6 +75,8 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, lowercase: true, index: true },
     phone: { type: String },
     countryCode: { type: String },
+    dob: { type: Date, default: null },
+    dateOfJoining: { type: Date, default: Date.now },
     department: { 
       type: String, 
       validate: {
@@ -119,7 +136,20 @@ const UserSchema = new Schema<IUser>(
     },
     resetPasswordOtp: { type: String, default: null },
     resetPasswordOtpExpiry: { type: Date, default: null },
-    mustChangePassword: { type: Boolean, default: false }
+    mustChangePassword: { type: Boolean, default: false },
+    slack: {
+      connected: { type: Boolean, default: false },
+      teamId: { type: String, default: null },
+      teamName: { type: String, default: null },
+      slackUserId: { type: String, default: null },
+      slackDisplayName: { type: String, default: null },
+      slackUsername: { type: String, default: null },
+      accessToken: { type: String, default: null },
+      refreshToken: { type: String, default: null },
+      expiresAt: { type: Date, default: null },
+      scopes: { type: String, default: null },
+      connectedAt: { type: Date, default: null }
+    }
   },
   { timestamps: true }
 );

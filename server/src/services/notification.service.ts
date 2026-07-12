@@ -1,7 +1,7 @@
 import { Notification } from '../models/Notification';
 import { User } from '../models/User';
 import mongoose from 'mongoose';
-import { getSocketIO } from '../gateway/chat.gateway';
+import { getSocketIO } from '../gateway/socket';
 
 const pushNotifSocket = (userId: string, notification: any) => {
   try {

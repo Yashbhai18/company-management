@@ -6,7 +6,7 @@ import { notificationService } from '../services/notification.service';
 import type { TokenPayload } from '../utils/token';
 
 // For WebSocket instant relays
-import { getSocketIO } from '../gateway/chat.gateway'; 
+import { getSocketIO } from '../gateway/socket'; 
 
 /** Helper: Safe dispatch of socket triggers to real-time clients */
 const pushNotifSocket = (userId: string) => {

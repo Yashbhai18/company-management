@@ -11,16 +11,10 @@ export default function Sidebar() {
   const searchParams = useSearchParams();
   const [user, setUser] = React.useState<any>(null);
   const [org, setOrg] = React.useState<any>(null);
-  const [dmUnread, setDmUnread] = React.useState(0);
   const [isOpenMobile, setIsOpenMobile] = React.useState(false);
   const socket = useSocket();
 
-  const fetchUnreadCount = React.useCallback(() => {
-    api.get('/chat/conversations').then(res => {
-      const total = (res.data as any[]).reduce((acc: number, c: any) => acc + (c.unreadCount || 0), 0);
-      setDmUnread(total);
-    }).catch(() => {});
-  }, []);
+
 
   React.useEffect(() => {
     const handleToggle = () => setIsOpenMobile(prev => !prev);
@@ -58,24 +52,19 @@ export default function Sidebar() {
         console.error('Failed to load user', err);
       }
     });
-    
-    fetchUnreadCount();
-  }, [fetchUnreadCount]);
+  }, []);
 
   React.useEffect(() => {
     if (!socket) return;
     const handleUpdate = () => {
-      fetchUnreadCount();
+      // Handle non-chat notifications here if needed in the future
     };
-    socket.on('chat:dm_message', handleUpdate);
     socket.on('notification:new', handleUpdate);
-    socket.on('chat:unread_count_updated', handleUpdate);
     return () => {
-      socket.off('chat:dm_message', handleUpdate);
       socket.off('notification:new', handleUpdate);
-      socket.off('chat:unread_count_updated', handleUpdate);
     };
-  }, [socket, fetchUnreadCount]);
+  }, [socket]);
+
 
   const handleLogout = async () => {
     try {
@@ -100,7 +89,7 @@ export default function Sidebar() {
     { label: 'Timesheets', path: '/timesheets', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
     { label: 'Time Off', path: '/time-off', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
     { label: 'Payroll', path: '/salary', icon: 'M12 8c-2.761 0-5 1.79-5 4s2.239 4 5 4 5 1.79 5 4-2.239 4-5 4m0-16v2m0 12v2m-4-4h8', adminOnly: true },
-    { label: 'Chat', path: '/chat', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', badge: dmUnread },
+    { label: 'Slack', path: '/chat/slack', icon: 'M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5zm-5 0c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5zM9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5zm5 0c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5zM21.5 9.5H10c-.83 0-1.5-.67-1.5-1.5S9.17 6.5 10 6.5h11.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm0 5H10c-.83 0-1.5.67-1.5 1.5S9.17 17.5 10 17.5h11.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5z' },
   ];
 
   const projectItems = [
@@ -110,7 +99,8 @@ export default function Sidebar() {
 
   const adminItems = [
     { label: 'Locations', path: '/locations', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z' },
-    { label: 'Security', path: '/security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' }
+    { label: 'Security', path: '/security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+    { label: 'Slack Setup', path: '/settings/slack', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' }
   ];
 
   const renderNavItems = (items: typeof workforceItems) => {

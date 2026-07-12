@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { Task } from '../models/Task';
-import { Message } from '../models/Message';
 import { Holiday } from '../models/Holiday';
 import { TimeOffRequest } from '../models/TimeOffRequest';
 import { User } from '../models/User';
@@ -12,17 +11,17 @@ export const searchAll = async (req: Request, res: Response) => {
     const { q } = req.query;
 
     if (!q || typeof q !== 'string') {
-      return res.json({ tasks: [], messages: [], holidays: [], timeOff: [], people: [] });
+      return res.json({ tasks: [], holidays: [], timeOff: [], people: [] });
     }
 
     const queryStr = q.trim();
     if (queryStr.length === 0) {
-      return res.json({ tasks: [], messages: [], holidays: [], timeOff: [], people: [] });
+      return res.json({ tasks: [], holidays: [], timeOff: [], people: [] });
     }
 
     const regex = new RegExp(queryStr, 'i');
 
-    const [tasks, messages, holidays, timeOffRequests, users] = await Promise.all([
+    const [tasks, holidays, timeOffRequests, users] = await Promise.all([
       // 1. Search Tasks (only in org, and if role is employee, only assigned to them)
       Task.find({
         orgId: user.orgId,
@@ -32,16 +31,7 @@ export const searchAll = async (req: Request, res: Response) => {
         .limit(5)
         .select('title description status dueDate'),
 
-      // 2. Search Chat Messages (only in org)
-      Message.find({
-        orgId: user.orgId,
-        content: regex
-      })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select('content senderName senderAvatar senderId conversationId type createdAt parentId'),
-
-      // 3. Search Holidays
+      // 2. Search Holidays
       Holiday.find({
         orgId: user.orgId,
         description: regex
@@ -71,7 +61,6 @@ export const searchAll = async (req: Request, res: Response) => {
 
     return res.json({
       tasks,
-      messages,
       holidays,
       timeOff: timeOffRequests,
       people: users

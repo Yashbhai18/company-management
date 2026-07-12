@@ -95,6 +95,7 @@ export const login = async (req: Request, res: Response) => {
   });
   try {
     const body = schema.parse(req.body);
+    const macAddress = req.headers['x-mac-address'] as string || undefined;
     const result = await authService.login({ 
       identifier: body.identifier, 
       password: body.password, 
@@ -102,7 +103,9 @@ export const login = async (req: Request, res: Response) => {
       targetRole: body.targetRole,
       orgSlug: body.orgSlug,
       ipAddress: req.ip || undefined,
-      userAgent: req.headers['user-agent'] || undefined
+      userAgent: req.headers['user-agent'] || undefined,
+      macAddress,
+      mfaTrustedCookie: req.cookies['mfa_trusted'] || undefined
     });
     if (result.requires2fa) {
       return res.json({ requires2fa: true, tempToken: result.tempToken });
@@ -115,6 +118,21 @@ export const login = async (req: Request, res: Response) => {
       });
     }
     res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
+
+    // Set/renew the mfa_trusted cookie if MFA is bypassed/trusted for this login
+    if (result.user && result.user.twoFactorEnabled && macAddress) {
+      const { encrypt } = await import('../utils/crypto');
+      const mfaBypassToken = encrypt(JSON.stringify({
+        userId: result.user._id.toString(),
+        macAddress,
+        verifiedAt: new Date().toISOString()
+      }));
+      res.cookie('mfa_trusted', mfaBypassToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: 24 * 3600 * 1000 // 1 day
+      });
+    }
+
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Login failed' });
@@ -398,6 +416,7 @@ export const verify2fa = async (req: Request, res: Response) => {
     const tempToken = authHeader.split(' ')[1];
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
+    const macAddress = req.headers['x-mac-address'] as string || undefined;
 
     const result = await authService.verify2faLogin({
       tempToken,
@@ -408,6 +427,19 @@ export const verify2fa = async (req: Request, res: Response) => {
 
     // Set refresh token cookie on successful authentication
     res.cookie('refreshToken', result.refreshRaw, COOKIE_OPTIONS);
+
+    if (result.user && result.user.twoFactorEnabled && macAddress) {
+      const { encrypt } = await import('../utils/crypto');
+      const mfaBypassToken = encrypt(JSON.stringify({
+        userId: result.user._id.toString(),
+        macAddress,
+        verifiedAt: new Date().toISOString()
+      }));
+      res.cookie('mfa_trusted', mfaBypassToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: 24 * 3600 * 1000 // 1 day
+      });
+    }
 
     return res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err: any) {
@@ -436,8 +468,23 @@ export const enable2fa = async (req: Request, res: Response) => {
     const user = (req as any).user as TokenPayload;
     const ipAddress = req.ip;
     const userAgent = req.headers['user-agent'];
+    const macAddress = req.headers['x-mac-address'] as string || undefined;
 
     const result = await authService.enable2fa(user.userId, body.code, ipAddress, userAgent);
+
+    if (macAddress) {
+      const { encrypt } = await import('../utils/crypto');
+      const mfaBypassToken = encrypt(JSON.stringify({
+        userId: user.userId,
+        macAddress,
+        verifiedAt: new Date().toISOString()
+      }));
+      res.cookie('mfa_trusted', mfaBypassToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: 24 * 3600 * 1000 // 1 day
+      });
+    }
+
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Failed to enable Two-Factor Authentication.' });
@@ -454,6 +501,9 @@ export const disable2fa = async (req: Request, res: Response) => {
     const userAgent = req.headers['user-agent'];
 
     const result = await authService.disable2fa(user.userId, body.passwordConfirm, ipAddress, userAgent);
+
+    res.clearCookie('mfa_trusted', CLEAR_COOKIE_OPTIONS);
+
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ message: err.message || 'Failed to disable Two-Factor Authentication.' });

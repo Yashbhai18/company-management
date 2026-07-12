@@ -39,6 +39,7 @@ export const generateTemp2faToken = (payload: Temp2faPayload): string => {
 /** Verify a temporary 2FA verification token */
 export const verifyTemp2faToken = (token: string): Temp2faPayload => {
   const payload = jwt.verify(token, JWT_SECRET as jwt.Secret) as any;
+  console.log('[token debug] payload of verified token:', payload);
   if (payload.isTemp2fa !== true) {
     throw new Error('Invalid temporary token type');
   }

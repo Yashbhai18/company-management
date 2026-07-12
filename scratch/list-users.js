@@ -11,7 +11,7 @@ async function run() {
   const users = await mongoose.connection.db.collection('users').find().toArray();
   console.log('Users found:', users.length);
   users.forEach(u => {
-    console.log(`Name: ${u.name} | Email: ${u.email} | Username: ${u.username} | Role: ${u.role} | 2FA: ${u.is2faEnabled}`);
+    console.log(`Name: ${u.name} | Email: ${u.email} | Username: ${u.username} | Role: ${u.role} | 2FA: ${u.twoFactorEnabled}`);
   });
 
   await mongoose.disconnect();

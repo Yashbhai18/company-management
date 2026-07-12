@@ -1,323 +1,43 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import api from '../../../lib/api';
 import styles from './page.module.css';
 
 export default function DashboardPage() {
-  const [user, setUser] = React.useState<any>(null);
-  const [org, setOrg] = React.useState<any>(null);
+  const router = useRouter();
+  const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
-  const [activeShift, setActiveShift] = React.useState<any>(null);
-  const [stats, setStats] = React.useState<any>(null);
-  const [myOrgs, setMyOrgs] = React.useState<any[]>([]);
-  const [myRequests, setMyRequests] = React.useState<any[]>([]);
-  const [tasks, setTasks] = React.useState<any[]>([]);
-  const [leaveData, setLeaveData] = React.useState<any>(null);
-  const [recentShifts, setRecentShifts] = React.useState<any[]>([]);
-
-  // Localized Stopwatch State enabling ticking timers for active shifts
-  const [tickerTime, setTickerTime] = React.useState(new Date());
-
-  React.useEffect(() => {
-    // Tick continuously to update UI stopwatch every 1s ONLY if shift is active
-    if (!activeShift) return;
-    
-    setTickerTime(new Date());
-    const timer = setInterval(() => {
-      setTickerTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [activeShift]);
+  const [error, setError] = React.useState('');
 
   const fetchData = React.useCallback(async () => {
     try {
-      const uResp = await api.get('/auth/me');
-      const currentUser = uResp.data.user;
-      setUser(currentUser);
-      setOrg(uResp.data.org);
-
-      const [sResp, statResp, oResp, reqResp] = await Promise.all([
-        api.get('/timesheets/active'),
-        api.get('/users/stats'),
-        api.get('/auth/my-orgs'),
-        api.get('/auth/my-join-requests')
-      ]);
-
-      setActiveShift(sResp.data.active);
-      setStats(statResp.data);
-      setMyOrgs(oResp.data.orgs || []);
-      setMyRequests(reqResp.data.requests || []);
-
-      // Fetch tasks, leave requests, and timesheet history in parallel
-      const [tResp, lResp, histResp] = await Promise.all([
-        api.get('/tasks').catch(() => ({ data: [] })),
-        api.get(currentUser.role === 'employee' ? '/time-off/my-requests' : '/time-off/all-requests').catch(() => ({ data: { requests: [], pendingCount: 0 } })),
-        api.get('/timesheets').catch(() => ({ data: { entries: [] } }))
-      ]);
-      setTasks(tResp.data || []);
-      setLeaveData(lResp.data || null);
-      setRecentShifts(histResp.data?.entries || []);
+      // Pass local timezone offset so backend knows start of "today"
+      const tzOffset = new Date().getTimezoneOffset();
+      const res = await api.get(`/dashboard?tzOffset=${tzOffset}`);
+      setData(res.data);
     } catch (err: any) {
       if (err.response?.status !== 401) {
         console.error('Dashboard sync error:', err);
+        setError('Failed to load dashboard data. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Primary Fetch Lifecycle
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // CONTINUOUS INSTANT REFRESH ENGINE: Background updates every 30 seconds
+  // Real-time Dashboard Sync Every 30 seconds
   React.useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
     }, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
-
-  // Listen for global status triggers to force real-time synchronous refetches immediately!
-  React.useEffect(() => {
-    const onStatusChange = () => fetchData();
-    window.addEventListener('global-shift-status-changed', onStatusChange);
-    return () => window.removeEventListener('global-shift-status-changed', onStatusChange);
-  }, [fetchData]);
-
-  const getActiveDurationString = () => {
-    if (!activeShift) return '00:00:00';
-    const start = new Date(activeShift.clockIn);
-    const diff = tickerTime.getTime() - start.getTime();
-    if (diff < 0) return '00:00:00';
-    const hrs = Math.floor(diff / 3600000);
-    const mins = Math.floor((diff % 3600000) / 60000);
-    const secs = Math.floor((diff % 60000) / 1000);
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getWeeklyHours = () => {
-    const startOfWeek = new Date();
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    const thisWeeksEntries = recentShifts.filter((entry: any) => {
-      return new Date(entry.clockIn) >= startOfWeek;
-    });
-
-    let totalMinutes = thisWeeksEntries.reduce((sum: number, entry: any) => {
-      if (entry.durationMinutes) {
-        return sum + entry.durationMinutes;
-      }
-      if (!entry.clockOut) {
-        const elapsed = Math.floor((tickerTime.getTime() - new Date(entry.clockIn).getTime()) / 60000);
-        return sum + Math.max(0, elapsed);
-      }
-      return sum;
-    }, 0);
-
-    const hrs = Math.floor(totalMinutes / 60);
-    const mins = Math.round(totalMinutes % 60);
-    return `${hrs}h ${mins}m`;
-  };
-
-  const renderEmployeeDashboard = () => {
-    const activeTasks = tasks.filter((t: any) => t.status !== 'completed' && t.status !== 'done');
-    
-    const completedMinsToday = stats?.personalMinsToday || 0;
-    const activeMins = activeShift ? Math.floor((tickerTime.getTime() - new Date(activeShift.clockIn).getTime()) / 60000) : 0;
-    const totalMinsToday = completedMinsToday + activeMins;
-    const todayHrs = Math.floor(totalMinsToday / 60);
-    const todayMins = Math.floor(totalMinsToday % 60);
-
-    const shiftStatusText = activeShift ? 'Clocked In' : 'Clocked Out';
-    const weeklyHoursStr = getWeeklyHours();
-
-    return (
-      <div className={styles.pageContainer}>
-        {/* Welcome Header */}
-        <div className={styles.employeeHeader}>
-          <div>
-            <span className={styles.eyebrow}>Personal Workspace</span>
-            <h1 className={styles.title}>Welcome back, {user?.name || 'Employee'}</h1>
-          </div>
-          <div className={styles.dateText}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </div>
-        </div>
-
-        {/* Personal KPI Row */}
-        <div className={styles.kpiGrid}>
-          <div className={`${styles.kpiCard} ${activeShift ? styles.kpiActiveShiftCard : ''}`}>
-            <span className={styles.kpiLabel}>Shift Status</span>
-            <span className={styles.kpiValue}>
-              {shiftStatusText}
-              {activeShift && <span className={styles.pulseDot}></span>}
-            </span>
-            {activeShift ? (
-              <span className={styles.kpiSubtext}>
-                Started at {new Date(activeShift.clockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            ) : (
-              <span className={styles.kpiSubtext}>Ready to clock in</span>
-            )}
-          </div>
-          
-          <div className={styles.kpiCard}>
-            <span className={styles.kpiLabel}>Today's Timecard</span>
-            <span className={styles.kpiValue}>
-              {activeShift ? getActiveDurationString() : `${todayHrs}h ${todayMins}m`}
-            </span>
-            <span className={styles.kpiSubtext}>Active session duration</span>
-          </div>
-
-          <div className={styles.kpiCard}>
-            <span className={styles.kpiLabel}>This Week's Hours</span>
-            <span className={styles.kpiValue}>{weeklyHoursStr}</span>
-            <span className={styles.kpiSubtext}>Weekly cumulative</span>
-          </div>
-
-          <div className={styles.kpiCard}>
-            <span className={styles.kpiLabel}>My Open Tasks</span>
-            <span className={styles.kpiValue}>{activeTasks.length}</span>
-            <span className={styles.kpiSubtext}>Awaiting completion</span>
-          </div>
-        </div>
-
-        {/* Row 2: Personal Tasks vs Recent Shifts */}
-        <div className={styles.analyticsGrid}>
-          
-          {/* My Tasks Section */}
-          <div className={styles.analyticsCard}>
-            <div className={styles.cardHeaderRow}>
-              <h3 className={styles.cardSectionTitle}>My Active Assignments</h3>
-              <Link href="/tasks" className={styles.viewAllLink}>View All Tasks →</Link>
-            </div>
-            
-            <div className={styles.taskListContainer}>
-              {activeTasks.length === 0 ? (
-                <div className={styles.emptyContainer}>
-                  <p className={styles.emptyText}>You're all caught up! No active tasks assigned.</p>
-                </div>
-              ) : (
-                <div className={styles.dashboardTaskList}>
-                  {activeTasks.slice(0, 5).map((task: any) => {
-                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
-                    return (
-                      <div key={task._id} className={styles.dashboardTaskItem}>
-                        <div className={styles.taskInfo}>
-                          <span className={styles.taskTitleText}>{task.title}</span>
-                          <span className={styles.taskDescText}>{task.description || 'No description provided.'}</span>
-                          {task.dueDate && (
-                            <span className={`${styles.taskDueText} ${isOverdue ? styles.overdueText : ''}`}>
-                              Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {isOverdue && '(Overdue)'}
-                            </span>
-                          )}
-                        </div>
-                        <span className={`${styles.taskBadge} ${styles['status_' + task.status]}`}>
-                          {(task.status || '').replace('_', ' ')}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Shifts Section */}
-          <div className={styles.analyticsCard}>
-            <div className={styles.cardHeaderRow}>
-              <h3 className={styles.cardSectionTitle}>Recent Timecard Logs</h3>
-              <Link href="/timesheets" className={styles.viewAllLink}>Full Timesheet →</Link>
-            </div>
-            
-            <div className={styles.shiftsListContainer}>
-              {recentShifts.length === 0 ? (
-                <div className={styles.emptyContainer}>
-                  <p className={styles.emptyText}>No shifts logged in this period.</p>
-                </div>
-              ) : (
-                <div className={styles.dashboardShiftsList}>
-                  {recentShifts.slice(0, 5).map((entry: any) => {
-                    const dateStr = new Date(entry.clockIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                    const clockInStr = new Date(entry.clockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    const clockOutStr = entry.clockOut 
-                      ? new Date(entry.clockOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                      : 'Active Now';
-                    
-                    const durationStr = entry.durationMinutes !== undefined 
-                      ? `${Math.floor(entry.durationMinutes / 60)}h ${entry.durationMinutes % 60}m`
-                      : 'Ticking...';
-
-                    return (
-                      <div key={entry._id} className={styles.dashboardShiftRow}>
-                        <div className={styles.shiftMeta}>
-                          <span className={styles.shiftDate}>{dateStr}</span>
-                          <span className={styles.shiftHours}>{clockInStr} – {clockOutStr}</span>
-                        </div>
-                        <div className={styles.shiftDetails}>
-                          <span className={`${styles.locationTag} ${entry.locationStatus === 'on-site' ? styles.tagOnSite : styles.tagWfh}`}>
-                            {entry.locationStatus === 'on-site' ? 'On-site' : 'WFH'}
-                          </span>
-                          <span className={styles.shiftDuration}>{durationStr}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Row 3: My Leave Requests */}
-        <div className={styles.projectMatrixCard}>
-          <div className={styles.cardHeaderRow}>
-            <h3 className={styles.cardSectionTitle}>My Leave Requests</h3>
-            <Link href="/time-off" className={styles.viewAllLink}>Request Time Off →</Link>
-          </div>
-          
-          <div className={styles.leavesListContainer}>
-            {(!leaveData?.requests || leaveData.requests.length === 0) ? (
-              <div className={styles.emptyContainer}>
-                <p className={styles.emptyText}>No leave requests recorded yet.</p>
-              </div>
-            ) : (
-              <div className={styles.dashboardLeavesGrid}>
-                {leaveData.requests.slice(0, 3).map((req: any) => {
-                  const startDateStr = new Date(req.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  const endDateStr = new Date(req.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  
-                  return (
-                    <div key={req._id} className={styles.dashboardLeaveCard}>
-                      <div className={styles.leaveHeader}>
-                        <span className={styles.leaveType}>{(req.type || '').replace('_', ' ')}</span>
-                        <span className={`${styles.statusBadge} ${styles['status_' + req.status]}`}>
-                          {req.status}
-                        </span>
-                      </div>
-                      <div className={styles.leaveDates}>
-                        {startDateStr} – {endDateStr}
-                      </div>
-                      {req.reason && <div className={styles.leaveReason}>"{req.reason}"</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -327,97 +47,38 @@ export default function DashboardPage() {
     );
   }
 
-  // Branch here: If role is employee, render the new personalized view!
-  if (user?.role === 'employee') {
-    return renderEmployeeDashboard();
+  if (error) {
+    return (
+      <div className={styles.pageContainer}>
+        <div className={styles.emptyState}>{error}</div>
+      </div>
+    );
   }
 
-  // Determine KPI metrics dynamically with fallback to user mockup
-  const presentCount = stats?.totalPresent !== undefined 
-    ? stats.totalPresent 
-    : (activeShift ? 1 : 0);
-  
-  const displayPresent = stats?.totalPresent !== undefined 
-    ? `${stats.totalPresent} Employee${stats.totalPresent !== 1 ? 's' : ''}` 
-    : (activeShift ? '1 Employee' : '42 Employees');
+  if (!data) return null;
 
-  const displayAbsent = stats?.roster 
-    ? `${Math.max(0, stats.roster.length - (stats.totalPresent || 0))} Employee${(stats.roster.length - (stats.totalPresent || 0)) !== 1 ? 's' : ''}` 
-    : '3 Employees';
+  const {
+    topMetrics,
+    wfhVsOnSite,
+    newWidgets,
+    projectsMatrix,
+    recentActivity,
+    upcomingBirthdays,
+    upcomingAnniversaries,
+    departmentOverview,
+    attendanceHeatmap,
+    productivityScore,
+    payrollStatus,
+    slackStatus
+  } = data;
 
-  const activeTasksCount = tasks.filter((t: any) => t.status !== 'completed' && t.status !== 'done').length;
-  const displayTasks = activeTasksCount > 0 
-    ? `${activeTasksCount} Assignment${activeTasksCount !== 1 ? 's' : ''}` 
-    : '18 Assignments';
-
-  const pendingLeavesCount = leaveData?.pendingCount !== undefined 
-    ? leaveData.pendingCount 
-    : (leaveData?.requests?.filter((r: any) => r.status === 'pending').length || 0);
-  
-  const displayLeaves = pendingLeavesCount > 0 
-    ? `${pendingLeavesCount} Awaiting Review` 
-    : '4 Awaiting Review';
-
-  // Compile recent activities dynamically
-  const activities: any[] = [];
-  
-  // 1. Clock-in and clock-out events from recent shifts
-  recentShifts.forEach((entry: any) => {
-    const userName = entry.userId?.name || 'Employee';
-    if (entry.clockIn) {
-      const clockInDate = new Date(entry.clockIn);
-      activities.push({
-        rawTime: clockInDate,
-        time: clockInDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        user: userName,
-        action: `clocked in (${entry.locationStatus === 'on-site' ? 'On-site' : 'WFH'})`
-      });
-    }
-    if (entry.clockOut) {
-      const clockOutDate = new Date(entry.clockOut);
-      activities.push({
-        rawTime: clockOutDate,
-        time: clockOutDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        user: userName,
-        action: `clocked out`
-      });
-    }
-  });
-
-  // 2. Completed tasks
-  const completedTasks = tasks.filter((t: any) => t.status === 'completed' || t.status === 'done');
-  completedTasks.forEach((t: any) => {
-    const taskDate = t.completedAt ? new Date(t.completedAt) : (t.updatedAt ? new Date(t.updatedAt) : new Date());
-    activities.push({
-      rawTime: taskDate,
-      time: taskDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      user: t.assignedTo?.name || 'Employee',
-      action: `completed task "${t.title}"`
-    });
-  });
-
-  // 3. Leave requests
-  if (leaveData?.requests && Array.isArray(leaveData.requests)) {
-    leaveData.requests.forEach((req: any) => {
-      if (req.createdAt) {
-        const reqDate = new Date(req.createdAt);
-        activities.push({
-          rawTime: reqDate,
-          time: reqDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-          user: req.userId?.name || 'Employee',
-          action: `requested leave (${req.status})`
-        });
-      }
-    });
-  }
-
-  // Sort activities chronologically (descending: newest first)
-  activities.sort((a, b) => b.rawTime.getTime() - a.rawTime.getTime());
+  const renderEmptyState = (message: string) => (
+    <div className={styles.emptyState}>{message}</div>
+  );
 
   return (
     <div className={styles.pageContainer}>
-      
-      {/* Title / Eyebrow Header */}
+      {/* Header */}
       <div className={styles.pageHeader}>
         <div>
           <span className={styles.eyebrow}>Workspace Overview</span>
@@ -428,124 +89,237 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Row 1: KPI Cards */}
+      {/* Top Metrics Row */}
       <div className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>Present</span>
-          <span className={styles.kpiValue}>{displayPresent}</span>
+          <span className={styles.kpiLabel}>Present Today</span>
+          <span className={styles.kpiValue}>{topMetrics.presentEmployees}</span>
+          <span className={styles.kpiSubtext}>Includes WFH ({topMetrics.wfhEmployees}) & Late ({topMetrics.lateEmployees})</span>
         </div>
         <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>Absent</span>
-          <span className={styles.kpiValue}>{displayAbsent}</span>
+          <span className={styles.kpiLabel}>Absent / Leave</span>
+          <span className={styles.kpiValue}>{topMetrics.absentEmployees}</span>
+          <span className={styles.kpiSubtext}>{topMetrics.onLeaveEmployees} currently on leave</span>
         </div>
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>Active Tasks</span>
-          <span className={styles.kpiValue}>{displayTasks}</span>
+          <span className={styles.kpiValue}>{topMetrics.activeTasks}</span>
+          <span className={styles.kpiSubtext}>Pending & In Progress</span>
         </div>
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>Leave Requests</span>
-          <span className={styles.kpiValue}>{displayLeaves}</span>
+          <span className={styles.kpiValue}>{topMetrics.leaveRequests}</span>
+          <span className={styles.kpiSubtext}>Awaiting review</span>
         </div>
       </div>
 
-      {/* Row 2: Analytics Grid & Timeline Split */}
-      <div className={styles.analyticsGrid}>
-        
-        {/* Attendance Analytics Card */}
-        <div className={styles.analyticsCard}>
-          <h3 className={styles.cardSectionTitle}>Attendance Analytics</h3>
+      <div className={styles.mainGrid}>
+        {/* Left Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          {/* Weekly trends bar representation */}
-          <div className={styles.barChartContainer}>
-            <span className={styles.chartLabel}>Weekly Attendance Trends</span>
-            <div className={styles.barChart}>
-              {[
-                { day: 'Mon', pct: 92 },
-                { day: 'Tue', pct: 95 },
-                { day: 'Wed', pct: 88 },
-                { day: 'Thu', pct: 96 },
-                { day: 'Fri', pct: 91 }
-              ].map((item) => (
-                <div key={item.day} className={styles.chartBarColumn}>
-                  <div 
-                    className={styles.chartBarFill} 
-                    style={{ height: `${item.pct}%` }} 
-                    title={`${item.pct}% Attendance Rate`}
-                  />
-                  <span className={styles.chartBarLabel}>{item.day}</span>
+          <div className={styles.kpiGrid} style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>Productivity Score</span>
+              <span className={styles.kpiValue}>{productivityScore}%</span>
+              <span className={styles.kpiSubtext}>Company-wide metric</span>
+            </div>
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>Payroll Status ({payrollStatus.month})</span>
+              <span className={styles.kpiValue}>{payrollStatus.processedPct}%</span>
+              <span className={styles.kpiSubtext}>{payrollStatus.pendingCount} Employees Pending</span>
+            </div>
+          </div>
+
+          {/* Project Matrix */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Project Matrix</h3>
+            </div>
+            {projectsMatrix.length === 0 ? renderEmptyState("No active projects.") : (
+              <div className={styles.projectList}>
+                {projectsMatrix.map((p: any) => (
+                  <div key={p._id} className={styles.projectItem}>
+                    <div className={styles.projectHeader}>
+                      <span>{p.name}</span>
+                      <span className={styles.projectStats}>{p.progress}% ({p.completedTasks}/{p.totalTasks})</span>
+                    </div>
+                    <div className={styles.progressBarBg}>
+                      <div className={styles.progressBarFill} style={{ width: `${p.progress}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Recent Activity</h3>
+            </div>
+            {recentActivity.length === 0 ? renderEmptyState("No recent activity.") : (
+              <div className={styles.activityFeed}>
+                {recentActivity.map((act: any) => (
+                  <div key={act.id} className={styles.activityItem}>
+                    <div className={styles.activityAvatar}>
+                      {act.avatar ? <img src={act.avatar} alt="avatar" /> : act.user.charAt(0).toUpperCase()}
+                    </div>
+                    <div className={styles.activityContent}>
+                      <span className={styles.activityAction}><strong>{act.user}</strong> {act.action}</span>
+                      <span className={styles.activityTime}>{new Date(act.time).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Quick Actions */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Quick Actions</h3>
+            </div>
+            <div className={styles.quickActionsGrid}>
+              <button className={styles.actionBtn} onClick={() => router.push('/people')}>+ Add Employee</button>
+              <button className={styles.actionBtn} onClick={() => router.push('/tasks')}>+ Assign Task</button>
+              <button className={styles.actionBtn} onClick={() => router.push('/time-off')}>✓ Approve Leave</button>
+              <button className={styles.actionBtn} onClick={() => router.push('/tasks')}>+ Create Project</button>
+              <button className={styles.actionBtn} onClick={() => router.push('/chat/slack')}>💬 Open Slack</button>
+              <button className={styles.actionBtn} onClick={() => router.push('/timesheets')}>📊 Attendance Report</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* WFH vs On-Site */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Today's Location Split</h3>
+            </div>
+            {topMetrics.presentEmployees === 0 ? renderEmptyState("No attendance recorded today.") : (
+              <>
+                <div className={styles.splitBar}>
+                  <div className={`${styles.splitSegment} ${styles.splitWfh}`} style={{ width: `${wfhVsOnSite.wfh}%` }}>{wfhVsOnSite.wfh > 0 && `${wfhVsOnSite.wfh}%`}</div>
+                  <div className={`${styles.splitSegment} ${styles.splitOnsite}`} style={{ width: `${wfhVsOnSite.onSite}%` }}>{wfhVsOnSite.onSite > 0 && `${wfhVsOnSite.onSite}%`}</div>
+                </div>
+                <div className={styles.splitLabels}>
+                  <span><strong style={{color: '#3b82f6'}}>WFH</strong> ({topMetrics.wfhEmployees})</span>
+                  <span><strong style={{color: '#10b981'}}>On-Site</strong> ({topMetrics.presentEmployees - topMetrics.wfhEmployees})</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Quick Stats Grid */}
+          <div className={styles.kpiGrid} style={{ gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className={styles.kpiCard} style={{ padding: '1rem' }}>
+              <span className={styles.kpiLabel} style={{ fontSize: '0.75rem' }}>Online Now</span>
+              <span className={styles.kpiValue} style={{ fontSize: '1.5rem' }}>{newWidgets.employeesOnline}</span>
+            </div>
+            <div className={styles.kpiCard} style={{ padding: '1rem' }}>
+              <span className={styles.kpiLabel} style={{ fontSize: '0.75rem' }}>Avg Check-in</span>
+              <span className={styles.kpiValue} style={{ fontSize: '1.5rem' }}>{newWidgets.avgCheckInTime || '--:--'}</span>
+            </div>
+            <div className={styles.kpiCard} style={{ padding: '1rem' }}>
+              <span className={styles.kpiLabel} style={{ fontSize: '0.75rem' }}>Tasks Due</span>
+              <span className={styles.kpiValue} style={{ fontSize: '1.5rem' }}>{newWidgets.tasksDueToday}</span>
+              {newWidgets.overdueTasks > 0 && <span style={{ color: 'red', fontSize: '0.75rem', fontWeight: 600 }}>{newWidgets.overdueTasks} Overdue</span>}
+            </div>
+            <div className={styles.kpiCard} style={{ padding: '1rem' }}>
+              <span className={styles.kpiLabel} style={{ fontSize: '0.75rem' }}>Late Arrivals</span>
+              <span className={styles.kpiValue} style={{ fontSize: '1.5rem' }}>{newWidgets.lateArrivals}</span>
+            </div>
+          </div>
+
+          {/* Upcoming Events */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Upcoming Events</h3>
+            </div>
+            <div className={styles.userList}>
+              {upcomingBirthdays.length === 0 && upcomingAnniversaries.length === 0 && (
+                <div className={styles.emptyState}>No upcoming events.</div>
+              )}
+              {upcomingBirthdays.map((user: any) => (
+                <div key={`b-${user._id}`} className={styles.userListItem}>
+                  <div className={styles.activityAvatar}>
+                    {user.avatar ? <img src={user.avatar} alt="avatar" /> : user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className={styles.userListInfo}>
+                    <span className={styles.userListName}>{user.name}</span>
+                    <span className={styles.userListMeta}>🎂 Birthday on {new Date(user.nextBirthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  </div>
+                </div>
+              ))}
+              {upcomingAnniversaries.map((user: any) => (
+                <div key={`a-${user._id}`} className={styles.userListItem}>
+                  <div className={styles.activityAvatar}>
+                    {user.avatar ? <img src={user.avatar} alt="avatar" /> : user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className={styles.userListInfo}>
+                    <span className={styles.userListName}>{user.name}</span>
+                    <span className={styles.userListMeta}>🎉 {user.yearsCompleted} Year Anniversary on {new Date(user.nextAnniversary).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* WFH vs On-site progress bar ratio */}
-          <div className={styles.distributionContainer}>
-            <span className={styles.chartLabel}>WFH (40%) vs. On-site (60%)</span>
-            <div className={styles.stackedBar}>
-              <div className={styles.stackedFillPrimary} style={{ width: '60%' }} title="On-site: 60%" />
-              <div className={styles.stackedFillSecondary} style={{ width: '40%' }} title="WFH: 40%" />
+          {/* Department Overview */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Department Overview</h3>
             </div>
-            <div className={styles.stackedLegend}>
-              <div className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ backgroundColor: 'var(--primary)' }}></span>
-                <span>On-site (60%)</span>
+            {departmentOverview.length === 0 ? renderEmptyState("No departments set.") : (
+              <div className={styles.deptList}>
+                {departmentOverview.map((dept: any) => {
+                  const max = departmentOverview[0].count;
+                  const pct = (dept.count / max) * 100;
+                  return (
+                    <div key={dept._id} className={styles.deptItem}>
+                      <span className={styles.deptLabel}>{dept._id}</span>
+                      <div className={styles.deptBarBg}>
+                        <div className={styles.deptBarFill} style={{ width: `${pct}%` }}></div>
+                      </div>
+                      <span className={styles.deptCount}>{dept.count}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className={styles.legendItem}>
-                <span className={styles.legendDot} style={{ backgroundColor: '#cbd5e1' }}></span>
-                <span>WFH (40%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity Timeline Card */}
-        <div className={styles.analyticsCard}>
-          <h3 className={styles.cardSectionTitle}>Recent Activity Timeline</h3>
-          <div className={styles.timeline}>
-            {activities.length === 0 ? (
-              <div className={styles.emptyContainer}>
-                <p className={styles.emptyText}>No recent activity logged.</p>
-              </div>
-            ) : (
-              activities.slice(0, 10).map((act, index) => (
-                <div key={index} className={styles.timelineItem}>
-                  <span className={styles.timelineTime}>{act.time}</span>
-                  <span className={styles.timelineDesc}>
-                    <strong>{act.user}</strong> {act.action}
-                  </span>
-                </div>
-              ))
             )}
           </div>
-        </div>
 
-      </div>
-
-      {/* Row 3: Project Matrix Overview */}
-      <div className={styles.projectMatrixCard}>
-        <h3 className={styles.cardSectionTitle}>Project Matrix Overview</h3>
-        <div className={styles.projectRowGrid}>
-          {[
-            { name: 'Project A (Workforce Portal)', pct: 75 },
-            { name: 'Project B (Mobile Attendance)', pct: 30 },
-            { name: 'Project C (Payroll Integration)', pct: 50 }
-          ].map((proj) => (
-            <div key={proj.name} className={styles.projectItem}>
-              <div className={styles.projectNameRow}>
-                <span>{proj.name}</span>
-                <span>{proj.pct}%</span>
-              </div>
-              <div className={styles.projectBarTrack}>
-                <div 
-                  className={styles.projectBarFill} 
-                  style={{ width: `${proj.pct}%` }}
-                />
-              </div>
+          {/* Slack Status */}
+          <div className={styles.sectionCard}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>Slack Workspace Status</h3>
             </div>
-          ))}
+            {!slackStatus.connected ? renderEmptyState("Workspace not connected.") : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Status</span>
+                  <strong style={{ color: '#10b981' }}>Connected</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Last Sync</span>
+                  <strong>{new Date(slackStatus.lastSync).toLocaleString()}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Channels</span>
+                  <strong>{slackStatus.channels}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Members</span>
+                  <strong>{slackStatus.members}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
-
     </div>
   );
 }

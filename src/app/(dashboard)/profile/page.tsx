@@ -47,6 +47,36 @@ export default function ProfilePage() {
   const [isCreating, setIsCreating] = React.useState(false);
   const [orgError, setOrgError] = React.useState('');
 
+  const [slackStatus, setSlackStatus] = React.useState<any>(null);
+  const [loadingSlack, setLoadingSlack] = React.useState(true);
+
+  // Load Slack user status on mount
+  React.useEffect(() => {
+    api.get('/slack/user/status')
+      .then((res) => {
+        setSlackStatus(res.data);
+        setLoadingSlack(false);
+      })
+      .catch(() => {
+        setLoadingSlack(false);
+      });
+  }, []);
+
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const slackSuccess = searchParams?.get('success');
+  const slackError = searchParams?.get('error');
+
+  React.useEffect(() => {
+    if (slackSuccess === 'slack_user_connected') {
+      alert('Successfully linked your Slack profile!', 'Success');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      api.get('/slack/user/status').then((res) => setSlackStatus(res.data));
+    } else if (slackError) {
+      alert(`Slack connection failed: ${slackError}`, 'Error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [slackSuccess, slackError, alert]);
+
   React.useEffect(() => {
     api.get('/auth/me').then(res => {
       const u = res.data.user;
@@ -528,6 +558,113 @@ export default function ProfilePage() {
             </button>
           </div>
         )}
+
+        {/* Card 5: Slack Integration */}
+        <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardIconWrapper} style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className={styles.cardTitle}>Slack Integration</h2>
+              <p className={styles.cardSub}>Authenticate to write messages under your own name.</p>
+            </div>
+          </div>
+
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            {loadingSlack ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)' }}>
+                <div className={styles.loader} style={{ width: '20px', height: '20px' }} />
+                <span>Checking Slack status...</span>
+              </div>
+            ) : slackStatus?.connected ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div className={styles.avatarLarge} style={{ width: '48px', height: '48px', flexShrink: 0 }}>
+                    {slackStatus.slackAvatar ? (
+                      <img src={slackStatus.slackAvatar} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="Slack Avatar" />
+                    ) : (
+                      slackStatus.slackDisplayName?.charAt(0) || 'S'
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '600', fontSize: '1rem', color: 'var(--text-color)' }}>
+                      Connected as {slackStatus.slackDisplayName}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      Slack User ID: {slackStatus.slackUserId} | @{slackStatus.slackUsername}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.4', backgroundColor: 'var(--surface-overlay)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <strong>Slack Display Name:</strong> {slackStatus.slackDisplayName} <br />
+                  <strong>Slack Workspace:</strong> {slackStatus.teamName} <br />
+                  <strong>Connected Since:</strong> {new Date(slackStatus.connectedAt).toLocaleString()}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const res = await api.get('/slack/user/connect');
+                        window.location.href = res.data.url;
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || err.message || 'Failed to start reconnect flow', 'Error');
+                      }
+                    }} 
+                    className={styles.saveBtn}
+                    style={{ flex: 1, padding: '10px' }}
+                  >
+                    🔄 Reconnect Account
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (!confirm('Are you sure you want to unlink your Slack profile? You will not be able to send any Slack messages until you connect again.')) return;
+                      try {
+                        await api.delete('/slack/user/disconnect');
+                        setSlackStatus({ connected: false });
+                        alert('Your Slack profile has been unlinked successfully.', 'Success');
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || err.message || 'Failed to disconnect account', 'Error');
+                      }
+                    }} 
+                    className={styles.dangerBtn}
+                    style={{ flex: 1, padding: '10px' }}
+                  >
+                    🔌 Disconnect Profile
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.4', backgroundColor: 'var(--surface-overlay)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <strong>Slack Account</strong> <br />
+                  <strong>Status:</strong> Not Connected
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  Not currently connected. Link your personal profile to write messages, thread replies, and reactions directly under your own identity.
+                </p>
+                <button 
+                  onClick={async () => {
+                    try {
+                      const res = await api.get('/slack/user/connect');
+                      window.location.href = res.data.url;
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || err.message || 'Failed to start connection flow', 'Error');
+                    }
+                  }} 
+                  className={styles.saveBtn}
+                  style={{ backgroundColor: '#10b981', padding: '10px' }}
+                >
+                  ⚡ Connect Slack Account
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
       </div>
 

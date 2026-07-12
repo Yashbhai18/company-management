@@ -14,6 +14,11 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production']).default('development'),
   PORT: z.string().default('4000'),
+  SLACK_CLIENT_ID: z.string().optional(),
+  SLACK_CLIENT_SECRET: z.string().optional(),
+  SLACK_SIGNING_SECRET: z.string().optional(),
+  /** 32-byte hex key used for AES-256-GCM encryption of Slack tokens */
+  SLACK_TOKEN_ENCRYPTION_KEY: z.string().length(64).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -37,3 +42,7 @@ export const RESEND_API_KEY = env.RESEND_API_KEY;
 export const BREVO_API_KEY = env.BREVO_API_KEY;
 export const NODE_ENV = env.NODE_ENV;
 export const DEV_JWT_SECRET = env.DEV_JWT_SECRET;
+export const SLACK_CLIENT_ID = env.SLACK_CLIENT_ID || '';
+export const SLACK_CLIENT_SECRET = env.SLACK_CLIENT_SECRET || '';
+export const SLACK_SIGNING_SECRET = env.SLACK_SIGNING_SECRET || '';
+export const SLACK_TOKEN_ENCRYPTION_KEY = env.SLACK_TOKEN_ENCRYPTION_KEY || '';

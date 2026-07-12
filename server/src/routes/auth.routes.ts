@@ -9,7 +9,7 @@ const router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10000, // TEMP: disabled for dev — restore to 5 before production
   message: { message: 'Too many login attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -17,7 +17,7 @@ const authLimiter = rateLimit({
 
 const mfaLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10000, // TEMP: disabled for dev — restore to 5 before production
   message: { message: 'Too many 2FA verification attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false

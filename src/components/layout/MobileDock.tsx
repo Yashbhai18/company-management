@@ -9,41 +9,7 @@ import styles from './mobiledock.module.css';
 export default function MobileDock() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [dmUnread, setDmUnread] = React.useState(0);
   const socket = useSocket();
-
-  const fetchUnreadCount = React.useCallback(() => {
-    api.get('/chat/conversations')
-      .then(res => {
-        const total = (res.data as any[]).reduce((acc: number, c: any) => acc + (c.unreadCount || 0), 0);
-        setDmUnread(total);
-      })
-      .catch((err) => {
-        console.error('Failed to load unread counts for mobile dock', err);
-      });
-  }, []);
-
-  React.useEffect(() => {
-    fetchUnreadCount();
-  }, [fetchUnreadCount, pathname]);
-
-  React.useEffect(() => {
-    if (!socket) return;
-    
-    const handleUpdate = () => {
-      fetchUnreadCount();
-    };
-
-    socket.on('chat:dm_message', handleUpdate);
-    socket.on('notification:new', handleUpdate);
-    socket.on('chat:unread_count_updated', handleUpdate);
-    
-    return () => {
-      socket.off('chat:dm_message', handleUpdate);
-      socket.off('notification:new', handleUpdate);
-      socket.off('chat:unread_count_updated', handleUpdate);
-    };
-  }, [socket, fetchUnreadCount]);
 
   const handleMenuToggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -71,9 +37,9 @@ export default function MobileDock() {
       )
     },
     {
-      label: 'Chat',
-      path: '/chat',
-      badge: dmUnread,
+      label: 'Slack',
+      path: '/chat/slack',
+      badge: 0,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

@@ -435,7 +435,6 @@ export const authService = {
     return { user: targetUser, accessToken, refreshRaw: refresh.raw };
   },
 
-  /** Login with email/phone + password */
   login: async (params: { 
     identifier: string; 
     password: string; 
@@ -444,6 +443,8 @@ export const authService = {
     orgSlug?: string; // NEW parameter enabling multi-org isolation!
     ipAddress?: string;
     userAgent?: string;
+    macAddress?: string;
+    mfaTrustedCookie?: string;
   }) => {
     let query: any = { 
       $or: [
@@ -486,42 +487,48 @@ export const authService = {
     const ok = await user.comparePassword!(params.password);
     if (!ok) throw new Error('Invalid credentials');
 
-    if (user.mustChangePassword && user.email) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiry = addMinutes(new Date(), 10);
-      await User.updateMany(
-        { email: user.email.toLowerCase() },
-        { $set: { resetPasswordOtp: otp, resetPasswordOtpExpiry: expiry } }
-      );
-      await sendForgotPasswordOtpEmail(user.email, user.name, otp);
-      return {
-        requiresPasswordReset: true,
-        email: user.email,
-        message: 'For security reasons, you must change your password. An OTP has been sent to your email.'
-      };
-    }
+
 
     if (user.twoFactorEnabled && (user.role === 'admin' || user.role === 'super_admin')) {
-      const { Pending2faSession } = await import('../models/Pending2faSession');
-      
-      // Expire temp session in 5 minutes
-      const expiresAt = addMinutes(new Date(), 5);
-      const session = await Pending2faSession.create({
-        userId: user._id,
-        attempts: 0,
-        expiresAt
-      });
+      let bypass2fa = false;
+      if (params.macAddress && params.mfaTrustedCookie) {
+        try {
+          const { decrypt } = await import('../utils/crypto');
+          const decrypted = JSON.parse(decrypt(params.mfaTrustedCookie));
+          if (
+            decrypted.userId === user._id.toString() &&
+            decrypted.macAddress === params.macAddress &&
+            new Date(decrypted.verifiedAt).getTime() > Date.now() - 24 * 3600 * 1000
+          ) {
+            bypass2fa = true;
+          }
+        } catch (e) {
+          console.error('Failed to decrypt or validate mfa_trusted cookie:', e);
+        }
+      }
 
-      const tempToken = generateTemp2faToken({
-        userId: user._id.toString(),
-        pendingSessionId: session._id.toString(),
-        isTemp2fa: true
-      });
+      if (!bypass2fa) {
+        const { Pending2faSession } = await import('../models/Pending2faSession');
+        
+        // Expire temp session in 5 minutes
+        const expiresAt = addMinutes(new Date(), 5);
+        const session = await Pending2faSession.create({
+          userId: user._id,
+          attempts: 0,
+          expiresAt
+        });
 
-      user.rememberMe = !!params.rememberMe;
-      await user.save();
+        const tempToken = generateTemp2faToken({
+          userId: user._id.toString(),
+          pendingSessionId: session._id.toString(),
+          isTemp2fa: true
+        });
 
-      return { requires2fa: true, tempToken };
+        user.rememberMe = !!params.rememberMe;
+        await user.save();
+
+        return { requires2fa: true, tempToken };
+      }
     }
 
     const payload: TokenPayload = { userId: user._id.toString(), orgId: user.orgId.toString(), role: user.role };
@@ -982,13 +989,13 @@ export const authService = {
     let payload;
     try {
       payload = verifyTemp2faToken(params.tempToken);
-    } catch (err) {
-      throw new Error('Temporary login session expired or invalid. Please login again.');
+    } catch (err: any) {
+      throw new Error(`Temporary login session token verification failed: ${err.message || err}. Please login again.`);
     }
 
     const session = await Pending2faSession.findById(payload.pendingSessionId);
     if (!session) {
-      throw new Error('Temporary login session expired or invalid. Please login again.');
+      throw new Error('Temporary login session not found in database. Please login again.');
     }
 
     const user = await User.findById(payload.userId);
