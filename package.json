@@ -9,6 +9,7 @@
     "start:server": "node server/dist/server.js"
   },
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@slack/web-api": "^7.18.0",
     "@types/leaflet": "^1.9.21",
@@ -34,6 +35,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-icons": "^5.7.0",
     "react-leaflet": "^5.0.0",
     "react-pdf": "^10.4.1",
     "react-syntax-highlighter": "^16.1.1",

@@ -13,7 +13,7 @@ export interface ISlackFileRef {
   size: number;
   permalink: string;
   previewUrl?: string;
-  urlPrivate?: string;
+  // NOTE: url_private intentionally NOT stored — always fetch fresh via files.info
 }
 
 export interface IThreadParticipant {
@@ -71,7 +71,7 @@ const SlackFileRefSchema = new Schema<ISlackFileRef>({
   size: { type: Number, default: 0 },
   permalink: { type: String, required: true },
   previewUrl: { type: String },
-  urlPrivate: { type: String },
+  // url_private intentionally NOT stored — Slack URLs expire; always re-fetch via files.info
 }, { _id: false });
 
 const ThreadParticipantSchema = new Schema<IThreadParticipant>({

@@ -65,13 +65,19 @@
 }
 
 .pdfContainer {
+  width: 100%;
   height: 100%;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 24px 0;
+  overflow: hidden;
+}
+
+.pdfIframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  flex: 1;
+  background: #525659;
 }
 
 .pdfPage {

@@ -795,7 +795,6 @@
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  overflow: hidden;
   transition: var(--transition-hover);
   box-shadow: var(--shadow-sm);
 }
@@ -1220,6 +1219,9 @@
   border: 1px solid var(--border-subtle);
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  width: 352px;
+  height: 435px;
+  background: var(--bg-card);
 }
 
 /* Attachment previews */

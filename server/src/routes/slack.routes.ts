@@ -38,6 +38,7 @@ router.get('/users/:id', ctrl.getUser);
 
 // Channels
 router.get('/channels', ctrl.getChannels);
+router.get('/channels/:channelId/members', ctrl.getChannelMembers);
 router.post('/channel', ctrl.createChannel);
 router.post('/channel/dm', ctrl.openDMConversation);
 router.patch('/channel', ctrl.updateChannel);
@@ -59,5 +60,9 @@ router.delete('/file/:fileId', verifySlackConnected, ctrl.deleteFile);
 
 // Search
 router.get('/search', ctrl.search);
+
+// File Content & Thumbnails
+router.get('/files/:fileId/thumbnail', verifySlackConnected, ctrl.getThumbnail);
+router.get('/files/:fileId', verifySlackConnected, ctrl.getFileContent);
 
 export default router;

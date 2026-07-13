@@ -131,7 +131,7 @@ async function mapMessage(raw: any, channelId: string, workspaceId: string, orgI
       size: f.size || 0,
       permalink: f.permalink || '',
       previewUrl: f.thumb_360 || f.thumb_80 || '',
-      urlPrivate: f.url_private || '',
+      // url_private intentionally NOT stored — always re-fetch fresh via files.info
     })),
     replyCount: raw.reply_count || 0,
     isEdited: !!(raw.edited),

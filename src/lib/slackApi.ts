@@ -67,7 +67,8 @@ export interface SlackFileRef {
   size: number;
   permalink: string;
   previewUrl?: string;
-  urlPrivate?: string;
+  // urlPrivate intentionally removed — never store/expose Slack private URLs to the frontend.
+  // All file access goes through /api/slack/files/:slackFileId (backend proxy).
 }
 
 export interface SlackThreadParticipant {
@@ -130,6 +131,8 @@ export const slackApi = {
 
   // Channels
   getChannels: () => api.get<SlackChannel[]>('/slack/channels').then((r) => r.data),
+  getChannelMembers: (channelId: string) => 
+    api.get<SlackUser[]>(`/slack/channels/${channelId}/members`).then((r) => r.data),
   openDM: (recipientSlackUserId: string) =>
     api.post<SlackChannel>('/slack/channel/dm', { recipientSlackUserId }).then((r) => r.data),
   createChannel: (name: string, isPrivate: boolean) =>

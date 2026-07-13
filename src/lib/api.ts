@@ -14,6 +14,8 @@ if (typeof window !== 'undefined') {
   }
 }
 
+export const getAccessToken = () => accessToken;
+
 /** Clear all GET cache keys from sessionStorage */
 export const clearApiCache = () => {
   if (typeof window !== 'undefined') {
@@ -45,7 +47,7 @@ export const setAccessToken = (token: string | null) => {
   }
 };
 
-let apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+export let apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 if (apiBaseURL && !apiBaseURL.endsWith('/api') && !apiBaseURL.endsWith('/api/')) {
   apiBaseURL = apiBaseURL.endsWith('/') ? `${apiBaseURL}api` : `${apiBaseURL}/api`;
 }

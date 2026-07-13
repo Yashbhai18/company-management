@@ -359,6 +359,79 @@ export const updateChannel = async (req: Request, res: Response) => {
   }
 };
 
+// ── Channel Members ───────────────────────────────────────────────────────────
+
+export const getChannelMembers = async (req: Request, res: Response) => {
+  try {
+    const { orgId } = (req as any).user as TokenPayload;
+    const { channelId } = req.params;
+
+    const ws = await oauthService.getWorkspace(orgId);
+    if (!ws) throw new Error('No Slack workspace connected');
+    
+    // We should prefer the user token if available to see DMs they are in
+    let token = ws.getUserToken() || ws.getBotToken();
+    if (!token) throw new Error('No Slack token available');
+
+    const { WebClient } = await import('@slack/web-api');
+    const client = new WebClient(token);
+
+    // Call Slack conversations.members
+    const result = await client.conversations.members({ channel: channelId as string, limit: 200 });
+    const memberIds = result.members || [];
+
+    // Map these IDs to our local users
+    const { SlackUser } = await import('../models/SlackUser');
+    const dbUsers = await SlackUser.find({
+      orgId,
+      slackUserId: { $in: memberIds },
+      isDeleted: false
+    }).lean() as any[];
+
+    const formattedMembers = dbUsers.map(u => ({
+      slackUserId: u.slackUserId,
+      name: u.name,
+      displayName: u.displayName,
+      realName: u.realName,
+      email: u.email,
+      avatar: u.avatar,
+      isBot: u.isBot
+    }));
+
+    // Identify if any member IDs are missing from DB
+    const foundIds = new Set(formattedMembers.map(u => u.slackUserId));
+    const missingIds = memberIds.filter(id => !foundIds.has(id));
+
+    if (missingIds.length > 0) {
+      // Fallback: fetch missing users from Slack API directly
+      console.log(`[slack:members] Fetching ${missingIds.length} missing users from users.info`);
+      for (const missingId of missingIds) {
+        try {
+          const uInfo = await client.users.info({ user: missingId });
+          if (uInfo.user && !uInfo.user.deleted) {
+            const profile = uInfo.user.profile || {};
+            formattedMembers.push({
+              slackUserId: uInfo.user.id || missingId,
+              name: uInfo.user.name || '',
+              displayName: profile.display_name || profile.real_name || uInfo.user.name || '',
+              realName: profile.real_name || '',
+              email: profile.email || '',
+              avatar: profile.image_512 || profile.image_192 || profile.image_72 || profile.image_48,
+              isBot: !!uInfo.user.is_bot
+            });
+          }
+        } catch (err: any) {
+          console.warn(`[slack:members] Failed to fetch missing user ${missingId}:`, err.message);
+        }
+      }
+    }
+
+    res.json(formattedMembers);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export const getUsers = async (req: Request, res: Response) => {
@@ -431,7 +504,8 @@ export const postMessage = async (req: Request, res: Response) => {
   try {
     const { orgId, userId } = (req as any).user as TokenPayload;
     const { channelId, text, threadTs, blocks } = req.body;
-    const msg = await messagesService.postMessage(orgId, channelId, text, {
+    const decodedText = text ? text.replace(/&lt;/g, '<').replace(/&gt;/g, '>') : text;
+    const msg = await messagesService.postMessage(orgId, channelId, decodedText, {
       threadTs,
       blocks,
       senderUserId: userId
@@ -470,7 +544,8 @@ export const editMessage = async (req: Request, res: Response) => {
   try {
     const { orgId } = (req as any).user as TokenPayload;
     const { channelId, ts, text } = req.body;
-    await messagesService.editMessage(orgId, channelId, ts, text);
+    const decodedText = text ? text.replace(/&lt;/g, '<').replace(/&gt;/g, '>') : text;
+    await messagesService.editMessage(orgId, channelId, ts, decodedText);
     res.json({ message: 'Message edited' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -513,7 +588,8 @@ export const postThreadReply = async (req: Request, res: Response) => {
   try {
     const { orgId, userId } = (req as any).user as TokenPayload;
     const { channelId, threadTs, text } = req.body;
-    const msg = await messagesService.postMessage(orgId, channelId, text, {
+    const decodedText = text ? text.replace(/&lt;/g, '<').replace(/&gt;/g, '>') : text;
+    const msg = await messagesService.postMessage(orgId, channelId, decodedText, {
       threadTs,
       senderUserId: userId
     });
@@ -553,7 +629,7 @@ export const uploadFile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'channelId is required' });
     }
 
-    const reqFiles = req.files as Express.Multer.File[];
+    const reqFiles = (req as any).files as any[];
     if (!reqFiles || reqFiles.length === 0) {
       return res.status(400).json({ message: 'No files provided' });
     }
@@ -600,55 +676,214 @@ export const uploadFile = async (req: Request, res: Response) => {
   }
 };
 
-export const proxyFile = async (req: Request, res: Response) => {
+// ── Unified Slack File Proxy ──────────────────────────────────────────────────
+// Always fetches a fresh url_private_download via files.info — never trusts stored URLs.
+
+async function resolveSlackToken(orgId: string, userId: string): Promise<{ token: string; tokenType: 'user' | 'bot' }> {
+  const { getUserAccessToken } = await import('../integrations/slack/oauth.service');
+
+  // 1. Try the requesting user's OAuth token (handles token refresh automatically)
+  if (userId) {
+    const userToken = await getUserAccessToken(userId);
+    if (userToken) {
+      return { token: userToken, tokenType: 'user' };
+    }
+  }
+
+  // 2. Fall back to workspace bot token
+  const ws = await SlackWorkspace.findOne({ orgId, isActive: true });
+  const botToken = ws?.getBotToken();
+  if (botToken) {
+    return { token: botToken, tokenType: 'bot' };
+  }
+
+  throw new Error('No valid Slack token found for this organization');
+}
+
+async function fetchSlackFileInfo(fileId: string, token: string, tokenType: string): Promise<{ downloadUrl: string; thumbUrl: string; contentType: string; fileName: string }> {
+  console.log(`[slack:proxy] files.info → fileId=${fileId} tokenType=${tokenType}`);
+
+  const infoRes = await fetch(`https://slack.com/api/files.info?file=${fileId}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  const infoData: any = await infoRes.json();
+  console.log(`[slack:proxy] files.info response → ok=${infoData.ok} error=${infoData.error || 'none'}`);
+
+  if (!infoData.ok) {
+    if (['invalid_auth', 'not_authed', 'account_inactive'].includes(infoData.error)) {
+      console.error(`[slack:proxy] Auth error from files.info (${infoData.error}):`, JSON.stringify(infoData));
+    }
+    throw Object.assign(new Error(`Slack files.info error: ${infoData.error}`), {
+      slackError: infoData.error,
+      statusCode: infoData.error === 'file_not_found' ? 404 : 502
+    });
+  }
+
+  const file = infoData.file;
+  const downloadUrl = file?.url_private_download || file?.url_private;
+  if (!downloadUrl) {
+    console.error(`[slack:proxy] No download URL in files.info response:`, JSON.stringify(file));
+    throw Object.assign(new Error('File has no downloadable URL'), { statusCode: 404 });
+  }
+  
+  const thumbUrl = file?.thumb_1024 || file?.thumb_720 || file?.thumb_480 || file?.thumb_360 || file?.thumb_160 || file?.thumb_80 || file?.thumb_64 || downloadUrl;
+
+  console.log(`[slack:proxy] downloadUrl=${downloadUrl}, thumbUrl=${thumbUrl}`);
+  return {
+    downloadUrl,
+    thumbUrl,
+    contentType: file.mimetype || 'application/octet-stream',
+    fileName: file.name || file.title || fileId
+  };
+}
+
+async function streamSlackFile(
+  downloadUrl: string,
+  token: string,
+  tokenType: string,
+  fileId: string
+): Promise<{ buffer: Buffer; contentType: string }> {
+  console.log(`[slack:proxy] Fetching file content tokenType=${tokenType}`);
+
+  const proxyRes = await fetch(downloadUrl, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  console.log(`[slack:proxy] Slack download HTTP status=${proxyRes.status} fileId=${fileId}`);
+
+  if (!proxyRes.ok) {
+    const body = await proxyRes.text().catch(() => '');
+    console.error(`[slack:proxy] Slack download failed status=${proxyRes.status} body=${body}`);
+    throw Object.assign(
+      new Error(`Slack returned ${proxyRes.status} when downloading file`),
+      { statusCode: proxyRes.status === 401 || proxyRes.status === 403 ? proxyRes.status : 502 }
+    );
+  }
+
+  const arrayBuffer = await proxyRes.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const contentType = proxyRes.headers.get('content-type') || 'application/octet-stream';
+  console.log(`[slack:proxy] Downloaded ${buffer.length} bytes contentType=${contentType}`);
+  return { buffer, contentType };
+}
+
+export const getFileContent = async (req: Request, res: Response) => {
   try {
-    const { url } = req.query;
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ message: 'URL is required' });
+    const fileId = req.params.fileId;
+    const isDownload = req.query.download === '1';
+    const isThumb = req.query.thumb === '1';
+
+    console.log(`[slack:proxy] getFileContent → fileId=${fileId} download=${isDownload} thumb=${isThumb}`);
+
+    if (!fileId) {
+      return res.status(400).json({ message: 'File ID is required' });
     }
 
     const { orgId, userId } = (req as any).user as TokenPayload;
-    
-    // First try the user's personal token so they can access files shared in DMs
-    let token: string | undefined;
-    if (userId) {
-      const { User } = await import('../models/User');
-      const user = await User.findById(userId).select('slack').lean();
-      token = (user as any)?.slack?.accessToken || undefined;
-    }
-    
-    // Fallback to bot token if no user token
-    if (!token) {
-      const { SlackWorkspace } = await import('../models/SlackWorkspace');
-      const ws = await SlackWorkspace.findOne({ orgId, isActive: true });
-      token = ws?.getBotToken();
+    const fileIdStr = String(fileId);
+    const userIdStr = String(userId || '');
+
+    // Resolve token (user first, bot fallback)
+    let tokenInfo: { token: string; tokenType: string };
+    try {
+      tokenInfo = await resolveSlackToken(orgId, userIdStr);
+      console.log(`[slack:proxy] Using ${tokenInfo.tokenType} token for fileId=${fileIdStr}`);
+    } catch (e: any) {
+      return res.status(403).json({ message: e.message });
     }
 
-    if (!token) {
-      return res.status(403).json({ message: 'No valid Slack token found for authorization' });
-    }
-
-    const proxyRes = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    // Get fresh download URL from Slack
+    // eslint-disable-next-line prefer-const
+    let fileInfo!: { downloadUrl: string; thumbUrl: string; contentType: string; fileName: string };
+    try {
+      fileInfo = await fetchSlackFileInfo(fileIdStr, tokenInfo.token, tokenInfo.tokenType);
+    } catch (e: any) {
+      // If bot token fails auth, retry with user token specifically
+      if (tokenInfo.tokenType === 'bot' && e.slackError && ['invalid_auth', 'not_authed', 'file_not_found'].includes(e.slackError)) {
+        console.log(`[slack:proxy] Bot token failed (${e.slackError}), retrying with user token`);
+        const { getUserAccessToken } = await import('../integrations/slack/oauth.service');
+        const userToken = await getUserAccessToken(userIdStr);
+        if (userToken) {
+          try {
+            fileInfo = await fetchSlackFileInfo(fileIdStr, userToken, 'user');
+            tokenInfo = { token: userToken, tokenType: 'user' };
+          } catch (e2: any) {
+            return res.status(e2.statusCode || 502).json({ message: e2.message, slackError: e2.slackError });
+          }
+        } else {
+          return res.status(e.statusCode || 502).json({ message: e.message, slackError: e.slackError });
+        }
+      } else {
+        return res.status(e.statusCode || 502).json({ message: e.message, slackError: e.slackError });
       }
-    });
-
-    if (!proxyRes.ok) {
-      return res.status(proxyRes.status).json({ message: 'Failed to proxy file' });
     }
 
-    const contentType = proxyRes.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
+    // Stream the file
+    // eslint-disable-next-line prefer-const
+    let streamResult!: { buffer: Buffer; contentType: string };
+    try {
+      const targetUrl = isThumb ? fileInfo.thumbUrl : fileInfo.downloadUrl;
+      streamResult = await streamSlackFile(targetUrl, tokenInfo.token, tokenInfo.tokenType, fileIdStr);
+    } catch (e: any) {
+      // If download fails with auth error, retry with opposite token type
+      if ([401, 403].includes(e.statusCode) && tokenInfo.tokenType === 'bot') {
+        console.log(`[slack:proxy] Bot token rejected for download, retrying with user token`);
+        const { getUserAccessToken } = await import('../integrations/slack/oauth.service');
+        const userToken = await getUserAccessToken(userIdStr);
+        if (userToken) {
+          streamResult = await streamSlackFile(fileInfo.downloadUrl, userToken, 'user', fileIdStr);
+        } else {
+          return res.status(e.statusCode).json({ message: e.message });
+        }
+      } else {
+        return res.status(e.statusCode || 502).json({ message: e.message });
+      }
     }
-    
-    const arrayBuffer = await proxyRes.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
+
+    res.setHeader('Content-Type', streamResult.contentType);
+    res.setHeader('Content-Length', streamResult.buffer.length);
+    res.setHeader('Cache-Control', 'private, no-store'); // Private files should not be publicly cached
+
+    if (isDownload) {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileInfo.fileName)}"`);
+    }
+
+    return res.send(streamResult.buffer);
   } catch (err: any) {
+    console.error(`[slack:proxy] Unexpected error in getFileContent:`, err);
     res.status(500).json({ message: err.message });
   }
 };
+
+export const getThumbnail = async (req: Request, res: Response) => {
+  // Pass thumb=1 internally so getFileContent uses thumbUrl
+  req.query.thumb = '1';
+  return getFileContent(req, res);
+};
+
+// Legacy proxy endpoint — kept for backward compat but now also goes through files.info
+export const proxyFile = async (req: Request, res: Response) => {
+  // Redirect to getFileContent if we have a fileId query param
+  const fileId = req.query.fileId as string;
+  if (fileId) {
+    req.params = { ...req.params, fileId };
+    return getFileContent(req, res);
+  }
+
+  // If only a raw URL is provided (old path), reject it with a clear message
+  const url = req.query.url as string;
+  if (url) {
+    console.warn(`[slack:proxy] proxyFile called with raw url= (deprecated, stale URL risk). url=${url}`);
+    return res.status(400).json({
+      message: 'Direct URL proxying is no longer supported. Use /api/slack/files/:fileId instead.',
+    });
+  }
+
+  return res.status(400).json({ message: 'fileId or url query param required' });
+};
+
+
 
 export const deleteFile = async (req: Request, res: Response) => {
   try {

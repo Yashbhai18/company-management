@@ -26,6 +26,9 @@ import {
   Code,
   AtSign
 } from 'lucide-react';
+import { IosSpinner } from '../../../../components/ui/IosSpinner';
+import { MentionDropdown, MentionUser } from '../../../../components/slack/MentionDropdown';
+import { parseSlackMrkdwn, buildUserMap, convertMentionsToSlack, UserMap } from '../../../../lib/parseSlackMrkdwn';
 
 const EmojiPicker = dynamic(() => import('@emoji-mart/react'), {
   ssr: false,
@@ -105,22 +108,15 @@ function formatMemberName(name: string, isMe: boolean) {
 }
 
 // ── System Message Parser ───────────────────────────────────────────────────────
-function isSystemMessage(text: string) {
-  if (!text) return false;
-  return /joined|left|archived|renamed|added/i.test(text) && text.includes('<@');
+function isSystemMessage(msg: SlackMessage) {
+  if (!msg.text) return false;
+  if (msg.files && msg.files.length > 0) return false;
+  return /joined|left|archived|renamed|added/i.test(msg.text) && msg.text.includes('<@');
 }
 
-function formatSystemMessage(text: string, users: SlackUser[]) {
-  let cleanText = text;
-  const userRegex = /<@([A-Z0-9]+)>/g;
-  let match;
-  while ((match = userRegex.exec(text)) !== null) {
-    const userId = match[1];
-    const user = users.find(u => u.slackUserId === userId);
-    const name = user ? user.displayName || user.name : 'Someone';
-    cleanText = cleanText.replace(match[0], name);
-  }
-  return cleanText;
+function formatSystemMessage(text: string, userMap: UserMap) {
+  // System messages also get the full mrkdwn parser
+  return parseSlackMrkdwn(text, userMap);
 }
 
 // ── Fallback-safe Avatar Component ──────────────────────────────────────────────
@@ -400,17 +396,19 @@ function AttachmentRenderer({ file }: { file: SlackFileRef }) {
   const isAudio = file.mimetype?.startsWith('audio/');
   const isPdf = file.mimetype === 'application/pdf';
 
-  const downloadUrl = file.urlPrivate 
-    ? `/api/slack/file/proxy?url=${encodeURIComponent(file.urlPrivate)}` 
+  // Always use the secure backend proxy — never expose Slack private URLs to <img>/<video> tags
+  const { apiBaseURL } = require('../../../../lib/api');
+  const secureUrl = file.slackFileId
+    ? `${apiBaseURL}/slack/files/${file.slackFileId}`
     : file.permalink;
 
   if (isImage) {
     return (
       <div className={styles.imageAttachment}>
         <a href={file.permalink} target="_blank" rel="noreferrer">
-          <img 
-            src={downloadUrl} 
-            alt={file.name} 
+          <img
+            src={file.previewUrl || secureUrl}
+            alt={file.name}
             title={file.name}
             className={styles.imagePreview}
             loading="lazy"
@@ -424,7 +422,7 @@ function AttachmentRenderer({ file }: { file: SlackFileRef }) {
     return (
       <div className={styles.videoAttachment}>
         <video controls className={styles.videoPreview} title={file.name}>
-          <source src={downloadUrl} type={file.mimetype} />
+          <source src={secureUrl} type={file.mimetype} />
           Your browser does not support the video tag.
         </video>
         <div className={styles.fileMetaRow}>
@@ -439,7 +437,7 @@ function AttachmentRenderer({ file }: { file: SlackFileRef }) {
     return (
       <div className={styles.audioAttachment}>
         <audio controls className={styles.audioPreview} title={file.name}>
-          <source src={downloadUrl} type={file.mimetype} />
+          <source src={secureUrl} type={file.mimetype} />
           Your browser does not support the audio element.
         </audio>
         <div className={styles.fileMetaRow}>
@@ -452,7 +450,7 @@ function AttachmentRenderer({ file }: { file: SlackFileRef }) {
 
   // Fallback for PDFs, Docs, etc.
   return (
-    <a href={downloadUrl} target="_blank" rel="noreferrer" className={styles.fileCard}>
+    <a href={`${secureUrl}?download=1`} target="_blank" rel="noreferrer" className={styles.fileCard}>
       <div className={styles.fileIcon}>
         {isPdf ? '📄' : getFileEmoji(file.mimetype)}
       </div>
@@ -464,6 +462,7 @@ function AttachmentRenderer({ file }: { file: SlackFileRef }) {
     </a>
   );
 }
+
 
 // ── Message Row ─────────────────────────────────────────────────────────────────
 function MessageRow({
@@ -485,6 +484,8 @@ function MessageRow({
   userConnected: boolean;
   users?: SlackUser[];
 }) {
+  const userMap = React.useMemo(() => buildUserMap(users), [users]);
+
   if (msg.isDeleted) {
     return (
       <div className={`${styles.messageRow} ${isGrouped ? styles.messageRowGrouped : ''}`}>
@@ -497,11 +498,11 @@ function MessageRow({
   }
 
   // System Message Styling: small, centered pill
-  if (isSystemMessage(msg.text)) {
+  if (isSystemMessage(msg)) {
     return (
       <div className={styles.systemMessageRow}>
         <span className={styles.systemMessageText}>
-          {formatSystemMessage(msg.text, users)}
+          {formatSystemMessage(msg.text, userMap)}
         </span>
       </div>
     );
@@ -528,7 +529,9 @@ function MessageRow({
           </div>
         )}
 
-        <div className={styles.messageText}>{msg.text}</div>
+        <div className={styles.messageText} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {parseSlackMrkdwn(msg.text, userMap)}
+        </div>
 
         {/* File attachments */}
         {(msg.files || []).length > 0 && (
@@ -598,18 +601,22 @@ function Composer({
   replyingTo,
   onCancelReply,
   onSend,
+  channelMembers,
 }: {
   channelId: string;
   threadTs?: string;
   replyingTo?: SlackMessage;
   onCancelReply: () => void;
   onSend: (text: string, files: File[], onProgress?: (p: number) => void) => Promise<void>;
+  channelMembers?: MentionUser[];
 }) {
   const [text, setText] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState(0);
   const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
+  const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
+  const mentionStartRef = React.useRef(-1); // index in text where @ was typed
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -622,8 +629,14 @@ function Composer({
   }, [text]);
 
   const handleSend = async () => {
-    const trimmed = text.trim();
+    let trimmed = text.trim();
     if ((!trimmed && selectedFiles.length === 0) || sending) return;
+    
+    // Convert @DisplayName → <@Uxxx> and @here/@channel/@everyone → <!tag>
+    if (channelMembers && channelMembers.length > 0) {
+      trimmed = convertMentionsToSlack(trimmed, channelMembers);
+    }
+
     setSending(true);
     setUploadProgress(0);
     try {
@@ -637,10 +650,72 @@ function Composer({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // When mention dropdown is open, let it consume nav keys
+    if (mentionQuery !== null) {
+      if (['ArrowUp', 'ArrowDown', 'Escape'].includes(e.key)) {
+        return; // MentionDropdown listens on window with capture=true
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        return; // MentionDropdown will call onSelect via its own keydown listener
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const detectMention = React.useCallback((val: string, cursor: number) => {
+    // Walk backwards from cursor to find an unspaced @ symbol
+    let i = cursor - 1;
+    while (i >= 0 && val[i] !== ' ' && val[i] !== '\n') {
+      if (val[i] === '@') {
+        // Found @. Allow it only if it's at start of text or preceded by whitespace
+        const prev = val[i - 1];
+        if (i === 0 || prev === ' ' || prev === '\n') {
+          const query = val.slice(i + 1, cursor);
+          mentionStartRef.current = i;
+          setMentionQuery(query);
+          return;
+        }
+        break;
+      }
+      i--;
+    }
+    // No active mention
+    mentionStartRef.current = -1;
+    setMentionQuery(null);
+  }, []);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setText(val);
+    detectMention(val, e.target.selectionStart ?? val.length);
+  };
+
+  const handleMentionSelect = (user: MentionUser) => {
+    const startIdx = mentionStartRef.current;
+    if (startIdx === -1 || !textareaRef.current) return;
+
+    const cursor = textareaRef.current.selectionStart;
+    const before = text.slice(0, startIdx);        // text before the @
+    const after = text.slice(cursor);               // text after current cursor
+    const insert = `@${user.displayName} `;
+    const newVal = before + insert + after;
+
+    setText(newVal);
+    setMentionQuery(null);
+    mentionStartRef.current = -1;
+
+    // Restore focus and move cursor
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newPos = startIdx + insert.length;
+        textareaRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -677,6 +752,15 @@ function Composer({
 
   return (
     <div className={styles.composerWrap}>
+      {mentionQuery !== null && channelMembers && (
+        <MentionDropdown
+          query={mentionQuery}
+          members={channelMembers}
+          onSelect={handleMentionSelect}
+          onClose={() => setMentionQuery(null)}
+          anchorRef={textareaRef}
+        />
+      )}
       {replyingTo && (
         <div className={styles.threadReplyBar}>
           <MessageSquare size={14} />
@@ -692,8 +776,19 @@ function Composer({
           className={styles.composerTextarea}
           placeholder={placeholder}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onKeyUp={(e) => {
+            // Re-detect mention when cursor moves with arrow keys
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+              const ta = textareaRef.current;
+              if (ta) detectMention(ta.value, ta.selectionStart ?? 0);
+            }
+          }}
+          onClick={() => {
+            const ta = textareaRef.current;
+            if (ta) detectMention(ta.value, ta.selectionStart ?? 0);
+          }}
           rows={1}
           disabled={!channelId}
         />
@@ -730,6 +825,18 @@ function Composer({
           </div>
         )}
 
+        {/* Upload Progress */}
+        {sending && uploadProgress > 0 && selectedFiles.length > 0 && (
+          <div style={{ padding: '0 12px 12px' }}>
+            <div className={styles.uploadProgressContainer}>
+              <div className={styles.uploadProgressBar} style={{ width: `${uploadProgress}%` }} />
+              <div className={styles.uploadProgressText}>
+                Uploading {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}... {Math.round(uploadProgress)}%
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className={styles.composerActions}>
           <input
             type="file"
@@ -759,6 +866,10 @@ function Composer({
             {showEmojiPicker && (
               <div className={styles.emojiPickerPopover}>
                 <EmojiPicker
+                  data={async () => {
+                    const res = await fetch('https://cdn.jsdelivr.net/npm/@emoji-mart/data');
+                    return res.json();
+                  }}
                   theme="light"
                   onEmojiSelect={handleEmojiSelect}
                   onClickOutside={() => setShowEmojiPicker(false)}
@@ -770,7 +881,18 @@ function Composer({
           <button type="button" className={styles.composerActionBtn} title="Code snippet" onClick={() => setText(t => t + '```\n\n```')}>
             <Code size={16} />
           </button>
-          <button type="button" className={styles.composerActionBtn} title="Mention user" onClick={() => setText(t => t + '@')}>
+          <button type="button" className={styles.composerActionBtn} title="Mention user" onClick={() => {
+            const ta = textareaRef.current;
+            const newText = text + '@';
+            setText(newText);
+            setTimeout(() => {
+              if (ta) {
+                ta.focus();
+                ta.setSelectionRange(newText.length, newText.length);
+                detectMention(newText, newText.length);
+              }
+            }, 0);
+          }}>
             <AtSign size={16} />
           </button>
 
@@ -780,7 +902,7 @@ function Composer({
             disabled={!canSend || sending}
             title="Send"
           >
-            <Send size={15} />
+            {sending ? <IosSpinner size="md" /> : <Send size={15} />}
           </button>
         </div>
       </div>
@@ -831,6 +953,7 @@ function ThreadPanel({
   userConnected,
   onConnect,
   users,
+  channelMembers,
 }: {
   channel: SlackChannel;
   rootMessage: SlackMessage;
@@ -841,6 +964,7 @@ function ThreadPanel({
   userConnected: boolean;
   onConnect: () => void;
   users: SlackUser[];
+  channelMembers: MentionUser[];
 }) {
   return (
     <div className={styles.rightPanel}>
@@ -904,6 +1028,7 @@ function ThreadPanel({
           replyingTo={rootMessage}
           onCancelReply={onClose}
           onSend={onSendReply}
+          channelMembers={channelMembers}
         />
       ) : (
         <OnboardingCard onConnect={onConnect} />
@@ -1016,6 +1141,19 @@ export default function SlackPage() {
       }
     }
   }, [activeChannel, slack]);
+
+  // Build mention members list from already-loaded slack.users
+  const channelMembers = React.useMemo<MentionUser[]>(() => {
+    return slack.users
+      .filter(u => !u.isDeleted)
+      .map(u => ({
+        slackUserId: u.slackUserId,
+        displayName: u.displayName || u.name || u.slackUserId,
+        realName: u.name || '',
+        avatar: u.avatar || '',
+        isBot: !!u.isBot,
+      }));
+  }, [slack.users]);
 
   // Scroll to bottom on new messages
   React.useEffect(() => {
@@ -1398,6 +1536,7 @@ export default function SlackPage() {
                   channelId={activeChannel.slackChannelId}
                   onCancelReply={() => setActiveThread(null)}
                   onSend={handleSend}
+                  channelMembers={channelMembers}
                 />
               ) : (
                 <OnboardingCard onConnect={handleConnectSlack} />
@@ -1428,6 +1567,7 @@ export default function SlackPage() {
             userConnected={slack.userConnected}
             onConnect={handleConnectSlack}
             users={slack.users}
+            channelMembers={channelMembers}
           />
         )}
       </div>

@@ -55,7 +55,7 @@ export async function onMessageCreated(event: any, workspaceId: string) {
       size: f.size || 0,
       permalink: f.permalink || '',
       previewUrl: f.thumb_360 || '',
-      urlPrivate: f.url_private || '',
+      // url_private intentionally NOT stored — always re-fetch fresh via files.info
     })),
     replyCount: 0,
     isEdited: false,
